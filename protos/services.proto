@@ -1,0 +1,98 @@
+syntax = "proto3";
+
+package mcsv;
+
+// Import message definitions
+// Note: In actual Twirp implementation, these would be imported
+// For now, they're defined in separate files
+
+// ============================================================================
+// SERVICE DEFINITIONS
+// These define the RPC methods for each microservice
+// ============================================================================
+
+// User Service - Manages user operations
+service UserService {
+  // Create a new user and trigger welcome email workflow
+  rpc CreateUser(UserRequest) returns (UserResponse);
+
+  // Receive notification that email was delivered
+  rpc NotifyEmailSent(EmailResponse) returns (UserResponse);
+
+  // Get user by ID (future)
+  // rpc GetUser(GetUserRequest) returns (UserRequest);
+
+  // Update user (future)
+  // rpc UpdateUser(UserRequest) returns (UserResponse);
+}
+
+// Job Service - Manages background job queue
+service JobService {
+  // Enqueue an email to be sent
+  rpc EnqueueEmail(UserRequest) returns (UserResponse);
+
+  // Receive notification from email service about delivery
+  rpc NotifyEmailDelivery(EmailResponse) returns (UserResponse);
+
+  // Generic job operations (using job.proto messages)
+  rpc EnqueueJob(EnqueueJobRequest) returns (EnqueueJobResponse);
+  rpc GetJobStatus(GetJobStatusRequest) returns (JobStatusResponse);
+  rpc CancelJob(CancelJobRequest) returns (CancelJobResponse);
+  rpc RetryJob(RetryJobRequest) returns (RetryJobResponse);
+  rpc GetQueueStats(GetQueueStatsRequest) returns (GetQueueStatsResponse);
+}
+
+// Email Service - Sends emails via SMTP
+service EmailService {
+  // Send an email (welcome, notification, etc.)
+  rpc SendEmail(EmailRequest) returns (EmailResponse);
+}
+
+// Client Service - Receives callbacks from the workflow
+service ClientService {
+  // Receive final notification that workflow completed
+  rpc ReceiveNotification(EmailResponse) returns (UserResponse);
+}
+
+// ============================================================================
+// ENDPOINT MAPPING (for reference)
+// ============================================================================
+//
+// Standard Twirp format: POST /twirp/{package}.{Service}/{Method}
+//
+// Your simplified format: POST /{service}/{Method}
+//
+// UserService:
+//   POST /user_svc/CreateUser          -> CreateUser(UserRequest) -> UserResponse
+//   POST /user_svc/NotifyEmailSent     -> NotifyEmailSent(EmailResponse) -> UserResponse
+//
+// JobService:
+//   POST /job_svc/EnqueueEmail         -> EnqueueEmail(UserRequest) -> UserResponse
+//   POST /job_svc/NotifyEmailDelivery  -> NotifyEmailDelivery(EmailResponse) -> UserResponse
+//   POST /job_svc/EnqueueJob           -> EnqueueJob(EnqueueJobRequest) -> EnqueueJobResponse
+//   POST /job_svc/GetJobStatus         -> GetJobStatus(GetJobStatusRequest) -> JobStatusResponse
+//   POST /job_svc/CancelJob            -> CancelJob(CancelJobRequest) -> CancelJobResponse
+//   POST /job_svc/RetryJob             -> RetryJob(RetryJobRequest) -> RetryJobResponse
+//   POST /job_svc/GetQueueStats        -> GetQueueStats(GetQueueStatsRequest) -> GetQueueStatsResponse
+//
+// EmailService:
+//   POST /email_svc/SendEmail          -> SendEmail(EmailRequest) -> EmailResponse
+//
+// ClientService:
+//   POST /client_svc/ReceiveNotification -> ReceiveNotification(EmailResponse) -> UserResponse
+//
+// ============================================================================
+// WORKFLOW
+// ============================================================================
+//
+// 1. Client -> UserService.CreateUser(UserRequest)
+//    └─> User created
+//        └─> UserService -> JobService.EnqueueEmail(UserRequest)
+//            └─> Job enqueued
+//                └─> Oban Worker -> EmailService.SendEmail(EmailRequest)
+//                    └─> Email sent
+//                        └─> EmailService -> JobService.NotifyEmailDelivery(EmailResponse)
+//                            └─> JobService -> UserService.NotifyEmailSent(EmailResponse)
+//                                └─> UserService -> ClientService.ReceiveNotification(EmailResponse)
+//                                    └─> Client receives final confirmation
+//

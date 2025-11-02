@@ -1,0 +1,49 @@
+syntax = "proto3";
+
+package mcsv;
+
+message UserRequest {
+  string id = 1;
+  string name = 2;
+  string email = 3;
+  string bio = 4;
+  string type = 5;         // Large text field for testing
+}
+
+message UserResponse {
+  bool ok = 1;
+  string message = 2;
+}
+
+// Request to store an image/PDF in user_svc storage (MinIO)
+message StoreImageRequest {
+  bytes image_data = 1;       // Binary data (PNG, PDF, etc.)
+  string user_id = 2;         // User identifier
+  string format = 3;          // File format: "png", "pdf", "jpeg"
+  string original_storage_id = 4;  // Optional: reference to original image
+  string user_email = 5;      // User email for async notification
+}
+
+// Response with presigned URL for stored image
+message StoreImageResponse {
+  bool success = 1;
+  string message = 2;
+  string storage_id = 3;      // Unique identifier in MinIO
+  string presigned_url = 4;   // Temporary URL for downloading (valid 1 hour)
+  int64 size = 5;             // Size in bytes
+}
+
+// Notification to client when PDF is ready (async callback)
+message PdfReadyNotification {
+  string user_email = 1;      // User who initiated the conversion
+  string storage_id = 2;      // PDF storage ID in MinIO
+  string presigned_url = 3;   // Temporary URL to view/download PDF
+  int64 size = 4;             // PDF size in bytes
+  string message = 5;         // Human-readable message
+}
+
+// Response to PDF notification
+message PdfReadyResponse {
+  bool ok = 1;
+  string message = 2;
+}
