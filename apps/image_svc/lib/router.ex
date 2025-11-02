@@ -12,6 +12,7 @@ defmodule ImageSvc.Router do
   plug(Plug.Telemetry, event_prefix: [:image_svc, :plug])
 
   plug(:match)
+
   plug(Plug.Parsers,
     parsers: [:json],
     json_decoder: Jason,
@@ -24,7 +25,7 @@ defmodule ImageSvc.Router do
   plug(:dispatch)
 
   # Health check endpoints
-  get "/health" do
+  match "/health", via: [:get, :head] do
     # Simple liveness check
     send_resp(conn, 200, "OK")
   end

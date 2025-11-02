@@ -13,10 +13,14 @@ defmodule EmailSvc.MixProject do
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       releases: [
-        client_svc: [
-          client_svc: :permanent,
-          opentelemetry_exporter: :permanent,
-          opentelemetry: :temporary
+        email_svc: [
+          applications: [
+            opentelemetry_exporter: :permanent,
+            opentelemetry: :temporary,
+            email_svc: :permanent
+          ],
+          include_executables_for: [:unix],
+          strip_beams: false
         ]
       ]
     ]

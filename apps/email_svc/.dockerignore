@@ -1,0 +1,30 @@
+# Git
+.git
+.gitignore
+
+# Mix artifacts
+/_build
+/deps
+*.ez
+
+# Elixir artifacts
+erl_crash.dump
+*.beam
+
+# Temporary files
+/tmp
+
+# IDE
+.elixir_ls
+.vscode
+.idea
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Documentation
+/doc

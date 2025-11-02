@@ -41,7 +41,14 @@ HTTP Request: GET /health
               └─> Numbers → Prometheus
                   http_request_count{path="/health"} 1
                   http_request_duration_ms 15
-                  
+
+
+Using driver `loki`: 
+
+```sh
+docker plugin install grafana/loki-docker-driver:latest --alias loki --grant-all-permissions
+```
+
 **Key Patterns Demonstrated**:
 
 - **Pull Model & Presigned URLs**: Image service fetches data on-demand via temporary URLs (using AWS S3 pattern)
@@ -490,3 +497,57 @@ This workflow demonstrates efficient binary data handling using the "Pull Model"
 - ✅ image_svc → job_svc: PDF binary (result)
 - ❌ user_svc → job_svc: NO binary (only URL)
 - ❌ job_svc → image_svc: NO binary (only URL)
+
+
+1. client_svc (local) → user_svc (Docker)
+   POST /user_svc/CreateUser ✅ 200 in 25ms
+
+2. user_svc → job_svc
+   POST /job_svc/EnqueueEmail ✅ 200 in 15ms
+
+3. job_svc → Oban (SQLite database we just fixed!)
+   [EmailSenderController] Enqueued welcome email ✅
+
+4. Oban Worker → email_svc
+   POST /email_svc/SendEmail ✅ 200 in 1ms
+
+5. email_svc → job_svc
+   POST /job_svc/NotifyEmailDelivery ✅ 204 in 24ms
+
+6. job_svc → user_svc
+   POST /user_svc/NotifyEmailSent ✅ 204 in 20ms
+
+7. user_svc → client_svc
+   ❌ Failed: :nxdomain (EXPECTED - see below)
+
+---
+
+1. client_svc (local) → user_svc (Docker)
+   POST /user_svc/ConvertImage ✅ 200 in 82ms
+
+2. user_svc → MinIO
+   Stored PNG: 1762116318739366_hyDntSpbYes.png (10011 bytes) ✅
+
+3. user_svc → job_svc
+   POST /job_svc/ConvertImage ✅ 200 in 15ms
+   
+4. Oban Worker (SQLite database we fixed!)
+   [ImageConversionWorker] Processing conversion job 5 ✅
+
+5. job_svc → image_svc
+   POST /image_svc/ConvertImage ✅
+
+6. image_svc → user_svc
+   GET /user_svc/ImageLoader (fetch PNG from MinIO) ✅
+
+7. ImageMagick Conversion
+   PNG 1920x1080 → PDF (9610 bytes) ✅
+
+8. image_svc → user_svc (the endpoint we just fixed!)
+   POST /user_svc/StoreImage ✅ 200 in 10ms
+
+9. user_svc → MinIO
+   Stored PDF: 1762116318937316_7CjhIdQpjf8.pdf (9610 bytes) ✅
+
+10. user_svc → client_svc
+    ⚠️ :nxdomain (EXPECTED - client_svc is local, not in Docker)

@@ -8,8 +8,8 @@ defmodule ImageSvc.UserSvcClient do
 
   require Logger
 
-  @base_url Application.compile_env(:image_svc, :user_svc_base_url)
-  @endpoints Application.compile_env(:image_svc, :user_svc_endpoints)
+  defp user_base_url, do: Application.get_env(:image_svc, :user_svc_base_url)
+  defp endpoints, do: Application.get_env(:image_svc, :user_svc_endpoints)
 
   @doc """
   Stores a PDF in user_svc (MinIO storage).
@@ -37,7 +37,7 @@ defmodule ImageSvc.UserSvcClient do
       }
       |> Mcsv.StoreImageRequest.encode()
 
-    case post(@base_url, @endpoints.store_image, request_binary) do
+    case post(user_base_url(), endpoints().store_image, request_binary) do
       {:ok, %Req.Response{status: 200, body: body}} ->
         {:ok, Mcsv.StoreImageResponse.decode(body)}
 

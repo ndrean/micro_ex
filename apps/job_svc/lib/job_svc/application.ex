@@ -6,6 +6,7 @@ defmodule JobApp do
 
   @impl true
   def start(_type, _args) do
+    JobSvc.Release.migrate()
     port = Application.get_env(:job_svc, :port, 8082)
     Logger.info("Starting JOB SERVER on port #{port}")
 
@@ -14,7 +15,7 @@ defmodule JobApp do
 
     children = [
       JobService.Repo,
-      JobSvc.Metrics,
+      JobService.Metrics,
       {Bandit, plug: JobRouter, port: 8082},
       {Oban, Application.fetch_env!(:job_svc, Oban)}
     ]

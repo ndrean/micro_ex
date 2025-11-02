@@ -7,8 +7,8 @@ defmodule Clients.UserSvcClient do
 
   require Logger
 
-  @base_url Application.compile_env(:job_svc, :user_svc_base_url)
-  @endpoints Application.compile_env(:job_svc, :user_svc_endpoints)
+  defp user_base_url, do: Application.get_env(:job_svc, :user_svc_base_url)
+  defp endpoints, do: Application.get_env(:job_svc, :user_svc_endpoints)
 
   @doc """
   Notifies user_svc that an email has been sent.
@@ -23,7 +23,7 @@ defmodule Clients.UserSvcClient do
   def notify_email_sent(email_response_binary) do
     Logger.info("[UserSvcClient] Notifying user_svc of email delivery")
 
-    post(@base_url, @endpoints.notify_email_sent, email_response_binary)
+    post(user_base_url(), endpoints().notify_email_sent, email_response_binary)
   end
 
   # Private HTTP helper

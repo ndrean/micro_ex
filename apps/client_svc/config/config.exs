@@ -9,27 +9,12 @@
 # move said applications out of the umbrella.
 import Config
 
-config :client_svc,
-  port: 4000,
-  user_svc_base_url: "http://localhost:8081",
-  user_endpoints: %{
-    create: "/user_svc/CreateUser",
-    convert_image: "/user_svc/ConvertImage"
-  }
+# NOTE: Runtime configuration (ports, URLs, credentials) is in config/runtime.exs
+# This file only contains compile-time configuration
 
-config :logger, :default_handler,
-  formatter:
-    {LoggerJSON.Formatters.Basic,
-     metadata: [
-       :request_id,
-       :service,
-       :trace_id,
-       :span_id,
-       :user_id,
-       :duration
-     ]}
+# Logger configuration - uses Docker Loki driver for log shipping
+config :logger,
+  level: :info
 
 # Add service name to all logs
 config :logger, :default_formatter, metadata: [:service]
-
-import_config "#{config_env()}.exs"

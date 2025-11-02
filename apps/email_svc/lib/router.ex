@@ -1,6 +1,15 @@
 defmodule EmailRouter do
   use Plug.Router
 
+  # Request ID for correlation across services (BEFORE :match)
+  plug(Plug.RequestId)
+
+  # Logger with request_id metadata (BEFORE :match)
+  plug(Plug.Logger, log: :info)
+
+  # Telemetry for metrics (BEFORE :match)
+  plug(Plug.Telemetry, event_prefix: [:email_svc, :plug])
+
   plug(:match)
 
   plug(Plug.Parsers,
@@ -11,14 +20,6 @@ defmodule EmailRouter do
   )
 
   plug(:dispatch)
-  # Request ID for correlation across services
-  plug(Plug.RequestId)
-
-  # Logger with request_id metadata
-  plug(Plug.Logger, log: :info)
-
-  # Telemetry for metrics
-  plug(Plug.Telemetry, event_prefix: [:email_svc, :plug])
 
   # RPC-style protobuf endpoints (matches services.proto)
 
@@ -28,7 +29,7 @@ defmodule EmailRouter do
   end
 
   # Health check endpoints
-  get "/health" do
+  match "/health", via: [:get, :head] do
     # Simple liveness check
     send_resp(conn, 200, "OK")
   end

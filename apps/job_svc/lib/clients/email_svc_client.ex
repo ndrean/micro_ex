@@ -7,10 +7,10 @@ defmodule JobService.Clients.EmailSvcClient do
 
   require Logger
 
-  @base_email_url Application.compile_env(:job_svc, :email_svc_base_url)
-  @base_job_url Application.compile_env(:job_svc, :job_svc_base_url)
-  @email_svc_endpoint Application.compile_env(:job_svc, :email_svc_endpoints)
-  @job_svc_endpoints Application.compile_env(:job_svc, :job_svc_endpoints)
+  defp base_email_url, do: Application.get_env(:job_svc, :email_svc_base_url)
+  defp base_job_url, do: Application.get_env(:job_svc, :job_svc_base_url)
+  defp email_svc_endpoint, do: Application.get_env(:job_svc, :email_svc_endpoints)
+  defp job_svc_endpoints, do: Application.get_env(:job_svc, :job_svc_endpoints)
 
   @doc """
   Sends an email request to email_svc.
@@ -34,7 +34,7 @@ defmodule JobService.Clients.EmailSvcClient do
 
     # Logger.info("[EmailSvcClient] Sending #{args["type"]} email to #{args["email"]}")
 
-    case post(@base_email_url, @email_svc_endpoint.send_email, request_binary) do
+    case post(base_email_url(), email_svc_endpoint().send_email, request_binary) do
       {:ok, %{status: 200, body: response_binary}} ->
         # Notify job_svc about email delivery
         notify_email_delivery(response_binary)
@@ -56,7 +56,7 @@ defmodule JobService.Clients.EmailSvcClient do
 
   defp notify_email_delivery(response_body) do
     # Post back to job_svc's callback endpoint
-    post(@base_job_url, @job_svc_endpoints.notify_email_delivery, response_body)
+    post(base_job_url(), job_svc_endpoints().notify_email_delivery, response_body)
   end
 
   defp notify_email_delivery_failure do
@@ -67,7 +67,7 @@ defmodule JobService.Clients.EmailSvcClient do
       }
       |> Mcsv.EmailResponse.encode()
 
-    post(@base_job_url, @job_svc_endpoints.notify_email_delivery, failure_response)
+    post(base_job_url(), job_svc_endpoints().notify_email_delivery, failure_response)
   end
 
   defp post(base, path, body, opts \\ []) do

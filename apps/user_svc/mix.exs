@@ -14,9 +14,13 @@ defmodule UserSvc.MixProject do
       deps: deps(),
       releases: [
         user_svc: [
-          user_svc: :permanent,
-          opentelemetry_exporter: :permanent,
-          opentelemetry: :temporary
+          applications: [
+            opentelemetry_exporter: :permanent,
+            opentelemetry: :temporary,
+            user_svc: :permanent
+          ],
+          include_executables_for: [:unix],
+          strip_beams: false
         ]
       ]
     ]
@@ -58,8 +62,8 @@ defmodule UserSvc.MixProject do
       {:telemetry_metrics_prometheus_core, "~> 1.2"},
       {:telemetry_poller, "~> 1.3"},
 
-      # Structured JSON logging
-      {:logger_json, "~> 7.0"},
+      # Structured JSON logging (optional - uncomment if using JSON logs)
+      # {:logger_json, "~> 7.0"},
 
       # OpenAPI documentation
       {:open_api_spex, "~> 3.21"},

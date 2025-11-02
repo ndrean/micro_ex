@@ -7,8 +7,9 @@ defmodule Clients.ClientSvcClient do
 
   require Logger
 
-  @base_url Application.compile_env(:user_svc, :client_svc_base_url)
-  @endpoints Application.compile_env(:user_svc, :client_svc_endpoints)
+  # Runtime config - reads from runtime.exs via environment variables
+  defp base_url, do: Application.get_env(:user_svc, :client_svc_base_url)
+  defp endpoints, do: Application.get_env(:user_svc, :client_svc_endpoints)
 
   @doc """
   Notifies the client that their PDF is ready.
@@ -36,7 +37,7 @@ defmodule Clients.ClientSvcClient do
 
     # Send async notification (don't block on response)
     Task.start(fn ->
-      case post(@base_url, @endpoints.pdf_ready, notification) do
+      case post(base_url(), endpoints().pdf_ready, notification) do
         {:ok, %{status: 204}} ->
           Logger.info("[ClientSvcClient] Client notified successfully")
 
@@ -64,7 +65,7 @@ defmodule Clients.ClientSvcClient do
   def receive_notification(message) do
     Logger.info("[ClientSvcClient] Forwarding email notification")
 
-    case post(@base_url, @endpoints.receive_notification, message) do
+    case post(base_url(), endpoints().receive_notification, message) do
       {:ok, %{status: 204}} ->
         Logger.info("[ClientSvcClient] Notification forwarded successfully")
         :ok

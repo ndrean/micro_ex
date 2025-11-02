@@ -48,7 +48,7 @@ defmodule UserRouter do
   end
 
   # Health check endpoints
-  get "/health" do
+  match "/health", via: [:get, :head] do
     # Simple liveness check
     send_resp(conn, 200, "OK")
   end

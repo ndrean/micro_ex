@@ -1,22 +1,34 @@
 import Config
 
-# Runtime configuration for client_svc
-# All values can be overridden via environment variables
+# Runtime configuration for image_svc
 
 # HTTP Port
-port = System.get_env("PORT", "4000") |> String.to_integer()
+port = System.get_env("PORT", "8084") |> String.to_integer()
 
-config :client_svc,
+config :image_svc,
   port: port,
   user_svc_base_url: System.get_env("USER_SVC_URL", "http://localhost:8081"),
-  user_endpoints: %{
-    create: "/user_svc/CreateUser",
-    convert_image: "/user_svc/ConvertImage"
+  user_svc_endpoints: %{
+    store_image: "/user_svc/StoreImage",
+    notify_user: "/user_svc/NotifyUser"
   }
+
+# MinIO / S3 Configuration
+config :ex_aws,
+  access_key_id: System.get_env("MINIO_ACCESS_KEY", "minioadmin"),
+  secret_access_key: System.get_env("MINIO_SECRET_KEY", "minioadmin"),
+  region: System.get_env("AWS_REGION", "us-east-1"),
+  json_codec: Jason
+
+config :ex_aws, :s3,
+  scheme: System.get_env("MINIO_SCHEME", "http://"),
+  host: System.get_env("MINIO_HOST", "localhost"),
+  port: System.get_env("MINIO_PORT", "9000") |> String.to_integer(),
+  region: System.get_env("AWS_REGION", "us-east-1")
 
 # OpenTelemetry Configuration
 config :opentelemetry,
-  service_name: System.get_env("OTEL_SERVICE_NAME", "client_svc"),
+  service_name: System.get_env("OTEL_SERVICE_NAME", "image_svc"),
   traces_exporter: :otlp
 
 config :opentelemetry_exporter,

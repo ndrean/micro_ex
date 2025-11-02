@@ -7,8 +7,8 @@ defmodule Clients.JobSvcClient do
 
   require Logger
 
-  @job_base_url Application.compile_env(:user_svc, :job_svc_base_url)
-  @job_endpoints Application.compile_env(:user_svc, :job_svc_endpoints)
+  defp job_base_url, do: Application.get_env(:user_svc, :job_svc_base_url)
+  defp job_endpoints, do: Application.get_env(:user_svc, :job_svc_endpoints)
 
   @doc """
   Requests image conversion from job_svc.
@@ -27,7 +27,7 @@ defmodule Clients.JobSvcClient do
       "[JobSvcClient] Requesting image conversion (#{byte_size(request_binary)} bytes with image_url)"
     )
 
-    case post(@job_base_url, @job_endpoints.convert_image, request_binary) do
+    case post(job_base_url(), job_endpoints().convert_image, request_binary) do
       {:ok, %{status: 200, body: response_binary}} ->
         {:ok, response_binary}
 
@@ -52,7 +52,7 @@ defmodule Clients.JobSvcClient do
   - `{:error, reason}` on failure
   """
   def enqueue_email(user_request_binary) do
-    case post(@job_base_url, @job_endpoints.enqueue_email, user_request_binary) do
+    case post(job_base_url(), job_endpoints().enqueue_email, user_request_binary) do
       {:ok, %{status: 200, body: response_binary}} ->
         # {:ok, Mcsv.UserResponse.decode(response_binary) |> dbg()}
         {:ok, response_binary}

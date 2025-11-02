@@ -11,8 +11,9 @@ defmodule Client do
   # Mix automatically compiles all .ex files in lib/
   # Just reference the module directly: Mcsv.UserRequest
 
-  @base_user_url Application.compile_env(:client_svc, :user_svc_base_url)
-  @user_endpoints Application.compile_env(:client_svc, :user_endpoints)
+  # Runtime config - reads from runtime.exs via environment variables
+  defp base_user_url, do: Application.get_env(:client_svc, :user_svc_base_url)
+  defp user_endpoints, do: Application.get_env(:client_svc, :user_endpoints)
 
   @doc """
   Create a single user synchronously.
@@ -35,7 +36,7 @@ defmodule Client do
       bio: String.duplicate("bio for #{i} ", 1),
       type: "welcome"
     }
-    |> post(@base_user_url, @user_endpoints.create)
+    |> post(base_user_url(), user_endpoints().create)
     |> case do
       {:ok, %Req.Response{} = resp} ->
         Mcsv.UserResponse.decode(resp.body)
@@ -67,12 +68,12 @@ defmodule Client do
 
     {success_count, failed_count}
   """
-  def stream_users(count \\ 100, concurrency \\ 10) do
+  def stream_users(_count \\ 100, concurrency \\ 10) do
     # Stream.iterate(1, &(&1 + 1))
 
-    1..count
+    # 1..count
 
-    # Stream.interval(500)
+    Stream.interval(100)
     |> Task.async_stream(
       fn i ->
         # Build and send each user request
@@ -83,7 +84,7 @@ defmodule Client do
           bio: String.duplicate("bio for #{i} ", 5),
           type: "welcome"
         }
-        |> post(@base_user_url, @user_endpoints.create)
+        |> post(base_user_url(), user_endpoints().create)
       end,
       ordered: false,
       max_concurrency: concurrency,

@@ -7,8 +7,8 @@ defmodule JobService.Clients.ImageSvcClient do
 
   require Logger
 
-  @image_svc_base_url Application.compile_env(:job_svc, :image_svc_base_url)
-  @image_svc_endpoints Application.compile_env(:job_svc, :image_svc_endpoints)
+  defp image_svc_base_url, do: Application.get_env(:job_svc, :image_svc_base_url)
+  defp image_svc_endpoints, do: Application.get_env(:job_svc, :image_svc_endpoints)
 
   @doc """
   Requests image conversion from image_svc.
@@ -38,9 +38,9 @@ defmodule JobService.Clients.ImageSvcClient do
 
     request_binary = Mcsv.ImageConversionRequest.encode(request)
 
-    case post(@image_svc_base_url, @image_svc_endpoints.convert_image, request_binary) do
+    case post(image_svc_base_url(), image_svc_endpoints().convert_image, request_binary) do
       {:ok, %{status: 200, body: response_binary}} ->
-        response = Mcsv.ImageConversionResponse.decode(response_binary) |> dbg()
+        response = Mcsv.ImageConversionResponse.decode(response_binary)
 
         if response.success do
           # Logger.info("[ImageSvcClient] Conversion acknowledged: #{response.message}")

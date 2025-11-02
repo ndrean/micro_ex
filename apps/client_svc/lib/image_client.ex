@@ -19,8 +19,9 @@ defmodule ImageClient do
 
   require OpenTelemetry.Tracer, as: Tracer
 
-  @base_user_url Application.compile_env(:client_svc, :user_svc_base_url)
-  @user_endpoints Application.compile_env(:client_svc, :user_endpoints)
+  # Runtime config getters (read from runtime.exs via env vars)
+  defp base_user_url, do: Application.get_env(:client_svc, :user_svc_base_url)
+  defp user_endpoints, do: Application.get_env(:client_svc, :user_endpoints)
 
   @doc """
   Convert a PNG file to PDF via the microservice pipeline.
@@ -73,8 +74,8 @@ defmodule ImageClient do
       :timer.tc(fn ->
         response =
           Req.post(
-            Req.new(base_url: @base_user_url),
-            url: @user_endpoints.convert_image,
+            Req.new(base_url: base_user_url()),
+            url: user_endpoints().convert_image,
             body: request_binary,
             headers: [{"content-type", "application/protobuf"}],
             receive_timeout: 5_000

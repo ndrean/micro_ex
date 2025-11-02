@@ -14,9 +14,13 @@ defmodule JobSvc.MixProject do
       deps: deps(),
       releases: [
         job_svc: [
-          job_svc: :permanent,
-          opentelemetry_exporter: :permanent,
-          opentelemetry: :temporary
+          applications: [
+            opentelemetry_exporter: :permanent,
+            opentelemetry: :temporary,
+            job_svc: :permanent
+          ],
+          include_executables_for: [:unix],
+          strip_beams: false
         ]
       ]
     ]
@@ -25,10 +29,7 @@ defmodule JobSvc.MixProject do
   # Run "mix help compile.app" to learn about applications.
   def application do
     [
-      extra_applications: [
-        :logger,
-        :tls_certificate_check
-      ],
+      extra_applications: [:logger, :inets, :tls_certificate_check],
       mod: {JobApp, []}
     ]
   end
@@ -38,14 +39,15 @@ defmodule JobSvc.MixProject do
     [
       {:bandit, "~> 1.8"},
       {:req, "~> 0.5.15"},
+      {:jason, "~> 1.4"},
       {:protobuf, "~> 0.15.0"},
       #  Background jobs
       {:oban, "~> 2.20"},
       # OpenTelemetry for distributed tracing
+      {:opentelemetry_exporter, "~> 1.10"},
       {:opentelemetry_api, "~> 1.5"},
       {:opentelemetry_oban, "~> 1.1"},
       {:opentelemetry_ecto, "~> 1.2"},
-      {:opentelemetry_exporter, "~> 1.10"},
       {:opentelemetry, "~> 1.7"},
       {:tls_certificate_check, "~> 1.29"},
 

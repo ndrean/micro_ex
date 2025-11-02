@@ -1,34 +1,26 @@
 import Config
 
-# Configure Image Service
-config :image_svc,
-  port: 8084,
-  user_svc_base_url: "http://localhost:8081",
-  user_svc_endpoints: %{
-    store_image: "/user_svc/StoreImage"
-  }
+# NOTE: Runtime configuration (ports, URLs, credentials) is in config/runtime.exs
+# This file only contains compile-time configuration
 
-# OpenTelemetry configuration for distributed tracing
-config :opentelemetry,
-  service_name: "image_svc",
-  traces_exporter: :otlp
-
-config :opentelemetry_exporter,
-  otlp_protocol: :http_protobuf,
-  otlp_endpoint: "http://localhost:4318"
-
-# JSON structured logging with request_id correlation
-config :logger, :default_handler,
-  formatter:
-    {LoggerJSON.Formatters.Basic,
-     metadata: [
-       :request_id,
-       :service,
-       :trace_id,
-       :span_id,
-       :user_id,
-       :duration
-     ]}
+# Logger configuration - uses Docker Loki driver for log shipping
+config :logger,
+  level: :info
 
 # Add service name to all logs
 config :logger, :default_formatter, metadata: [:service]
+
+# File handler for Loki/Promtail - COMMENTED OUT (using Docker Loki driver instead)
+# config :logger, :file_handler,
+#   level: :info,
+#   path: "../../logs/image_svc.log",
+#   formatter:
+#     {LoggerJSON.Formatters.Basic,
+#      metadata: [
+#        :request_id,
+#        :service,
+#        :trace_id,
+#        :span_id,
+#        :user_id,
+#        :duration
+#      ]}

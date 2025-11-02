@@ -3,7 +3,15 @@ defmodule ClientRouter do
 
   @moduledoc false
 
-  # plug(Plug.Logger)  # Commented out for benchmarking
+  # Request ID for correlation across services (BEFORE :match)
+  plug(Plug.RequestId)
+
+  # Logger with request_id metadata (BEFORE :match)
+  plug(Plug.Logger, log: :info)
+
+  # Telemetry for metrics (BEFORE :match)
+  plug(Plug.Telemetry, event_prefix: [:client_svc, :plug])
+
   plug(:match)
 
   plug(Plug.Parsers,
@@ -14,15 +22,6 @@ defmodule ClientRouter do
   )
 
   plug(:dispatch)
-
-  # Request ID for correlation across services
-  plug(Plug.RequestId)
-
-  # Logger with request_id metadata
-  plug(Plug.Logger, log: :info)
-
-  # Telemetry for metrics
-  plug(Plug.Telemetry, event_prefix: [:client_svc, :plug])
 
   # RPC-style protobuf endpoints (matches services.proto)
 

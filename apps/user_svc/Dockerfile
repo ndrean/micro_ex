@@ -1,6 +1,7 @@
-# Multi-stage Dockerfile for client_svc
+# Multi-stage Dockerfile for user_svc
 # Stage 1: Build the release
 ARG ELIXIR_IMAGE=hexpm/elixir:1.19.2-erlang-28.1-alpine-3.22.2
+# =elixir:1.19.2-erlang-28.1-alpine-3.22.2
 FROM ${ELIXIR_IMAGE} AS builder
 
 # Install build dependencies
@@ -42,8 +43,7 @@ RUN apk add --no-cache \
     bash \
     openssl \
     ncurses-libs \
-    libstdc++ \
-    wget
+    libstdc++
 
 # Create app user
 RUN addgroup -g 1000 appuser && \
@@ -52,17 +52,17 @@ RUN addgroup -g 1000 appuser && \
 WORKDIR /app
 
 # Copy release from builder
-COPY --from=builder --chown=appuser:appuser /app/_build/prod/rel/client_svc ./
+COPY --from=builder --chown=appuser:appuser /app/_build/prod/rel/user_svc ./
 
 # Switch to non-root user
 USER appuser
 
 # Expose port (can be overridden with PORT env var)
-EXPOSE 4000
+EXPOSE 8081
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD ["/bin/sh", "-c", "wget -q --spider http://localhost:${PORT:-4000}/health || exit 1"]
+    CMD ["/bin/sh", "-c", "wget -q --spider http://localhost:${PORT:-8081}/health || exit 1"]
 
 # Start the application
-CMD ["bin/client_svc", "start"]
+CMD ["bin/user_svc", "start"]

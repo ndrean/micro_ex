@@ -1,4 +1,4 @@
-defmodule JobSvc.Metrics do
+defmodule JobService.Metrics do
   @moduledoc """
   Prometheus metrics for image_svc.
 
