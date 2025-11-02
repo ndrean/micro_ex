@@ -14,6 +14,34 @@ We run 5 Elixir apps as microservices communicating via **Protobuf serialization
 
 Routes follow a **Twirp-like RPC DSL** (`/service_name/MethodName`) instead of traditional REST (`/resource/`)
 
+**Observability Stack**
+
+┌────────────────────────────────────────────────────----──┐
+│ 1️⃣ TRACING (Jaeger) - "What path did the request take?"  │
+│    ✅ http://localhost:16686                             │
+│    └─ See full request journey across services           │
+├────────────────────────────────────────────────----──────┤
+│ 2️⃣ LOGS (Loki + Grafana) - "What happened and why?"      │
+│    ✅ http://localhost:3000 (Grafana)                    │
+│    └─ Centralized logs from all services                 │
+│    └─ Filter by: service, request_id, level              │
+├────────────────────────────────────────────────----──────┤
+│ 3️⃣ METRICS (Prometheus) - "How much CPU/memory/time?"    │
+│    🔧 Needs bucket fix in metrics.ex                     │
+│    └─ Will show: CPU, memory, latency, request rate      │
+└───────────────────────────────────────────────────----───┘
+
+HTTP Request: GET /health
+        │
+        ├──> 📝 LOGS (Plug.Logger)
+        │     └─> JSON → Loki → Grafana
+        │         {"message":"GET /health", "request_id":"abc123"}
+        │
+        └──> 📊 METRICS (Plug.Telemetry)
+              └─> Numbers → Prometheus
+                  http_request_count{path="/health"} 1
+                  http_request_duration_ms 15
+                  
 **Key Patterns Demonstrated**:
 
 - **Pull Model & Presigned URLs**: Image service fetches data on-demand via temporary URLs (using AWS S3 pattern)

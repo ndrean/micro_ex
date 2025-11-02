@@ -7,11 +7,15 @@ defmodule ImageSvc.Application do
   """
 
   use Application
+  require Logger
 
   @impl true
   def start(_type, _args) do
+    # Set service name in all logs
+    Logger.metadata(service: "image_svc")
+
     port = Application.get_env(:image_svc, :port, 8084)
-    IO.puts("Starting image_svc on port #{port}")
+    Logger.info("Starting IMAGE SERVICE on port #{port}")
 
     children = [
       # Prometheus metrics exporter (port 9568)

@@ -50,11 +50,13 @@ defmodule ImageSvc.MixProject do
 
       # Prometheus metrics
       {:telemetry_metrics_prometheus_core, "~> 1.2"},
-      {:telemetry_poller, "~> 1.0"},
+      {:telemetry_poller, "~> 1.3"},
+
+      # Structured JSON logging
+      {:logger_json, "~> 7.0"},
 
       # OpenAPI documentation
       {:open_api_spex, "~> 3.21"},
-
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false}
     ]

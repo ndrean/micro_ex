@@ -36,10 +36,17 @@ defmodule UserSvc.MixProject do
     [
       {:bandit, "~> 1.8"},
       {:plug, "~> 1.18"},
-      {:jason, "~> 1.4"},
       {:req, "~> 0.5.15"},
-      {:req_s3, "~> 0.2.3"},
+
+      # serializers
+      {:jason, "~> 1.4"},
       {:protobuf, "~> 0.15.0"},
+
+      # S3/MinIO client
+      {:ex_aws, "~> 2.5"},
+      {:ex_aws_s3, "~> 2.5"},
+      {:hackney, "~> 1.20"},
+      {:sweet_xml, "~> 0.7"},
 
       # OpenTelemetry for distributed tracing
       {:opentelemetry_exporter, "~> 1.10"},
@@ -47,15 +54,19 @@ defmodule UserSvc.MixProject do
       {:opentelemetry_api, "~> 1.5"},
       {:tls_certificate_check, "~> 1.29"},
 
-      # S3/MinIO client
-      {:ex_aws, "~> 2.5"},
-      {:ex_aws_s3, "~> 2.5"},
-      {:hackney, "~> 1.20"},
-      {:sweet_xml, "~> 0.7"},
+      # Prometheus metrics
+      {:telemetry_metrics_prometheus_core, "~> 1.2"},
+      {:telemetry_poller, "~> 1.3"},
+
+      # Structured JSON logging
+      {:logger_json, "~> 7.0"},
+
+      # OpenAPI documentation
+      {:open_api_spex, "~> 3.21"},
+
+      # dev
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false}
-
-      # {:sibling_app_in_umbrella, in_umbrella: true}
     ]
   end
 end

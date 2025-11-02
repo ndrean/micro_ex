@@ -38,14 +38,25 @@ defmodule ClientSvc.MixProject do
     [
       {:bandit, "~> 1.8"},
       {:plug, "~> 1.18"},
-      {:jason, "~> 1.4"},
       {:req, "~> 0.5.15"},
+      # serializer
+      {:jason, "~> 1.4"},
       {:protobuf, "~> 0.15.0"},
       # {:telemetry, "~> 1.3"},
       {:opentelemetry_exporter, "~> 1.10"},
       {:opentelemetry, "~> 1.7"},
       {:opentelemetry_api, "~> 1.5"},
       {:tls_certificate_check, "~> 1.29"},
+
+      # Prometheus metrics
+      {:telemetry_metrics_prometheus_core, "~> 1.2"},
+      {:telemetry_poller, "~> 1.3"},
+
+      # Structured JSON logging
+      {:logger_json, "~> 7.0"},
+
+      # OpenAPI documentation
+      {:open_api_spex, "~> 3.21"},
 
       # {:telemetry_metrics, "~> 1.1"},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},

@@ -5,12 +5,17 @@ defmodule UserApp do
   @moduledoc """
   Entry point
   """
+  require Logger
 
   @impl true
   def start(_type, _args) do
-    IO.puts("Starting user_server 8081")
+    port = Application.get_env(:user_svc, :port, 8081)
+    Logger.info("Starting JOB SERVER on port #{port}")
+
+    Logger.metadata(service: "user_svc")
 
     children = [
+      UserSvc.Metrics,
       {Bandit, plug: UserRouter, port: 8081}
     ]
 

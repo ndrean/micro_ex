@@ -5,8 +5,7 @@ defmodule ImageSvc.ApiSpec do
   This module generates the OpenAPI 3.0 spec from controller annotations.
   """
 
-  alias OpenApiSpex.{Info, OpenApi, Paths, Server}
-  alias ImageSvc.Router
+  alias OpenApiSpex.{Info, OpenApi, Server}
   @behaviour OpenApi
 
   @impl OpenApi

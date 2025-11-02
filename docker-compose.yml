@@ -17,8 +17,15 @@ services:
       timeout: 20s
       retries: 3
 
+  zipkin:
+    image: openzipkin/zipkin-slim
+    container_name: msvc-zipkin
+    environment:
+      - STORAGE_TYPE=mem
+    ports:
+      - '9411:9411'
   jaeger:
-    image: jaegertracing/all-in-one:latest
+    image: jaegertracing/jaeger:latest
     container_name: msvc-jaeger
     ports:
       - "16686:16686" # Jaeger UI
@@ -33,6 +40,47 @@ services:
       timeout: 10s
       retries: 3
 
+  # Loki - Log aggregation (like Prometheus but for logs)
+  loki:
+    image: grafana/loki:latest
+    container_name: msvc-loki
+    ports:
+      - "3100:3100"  # Loki API
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - loki-data:/loki
+    healthcheck:
+      test: [ "CMD", "wget", "--spider", "-q", "http://localhost:3100/ready" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Grafana - Visualization for logs AND metrics
+  grafana:
+    image: grafana/grafana:latest
+    container_name: msvc-grafana
+    ports:
+      - "3000:3000"  # Grafana UI
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_AUTH_DISABLE_LOGIN_FORM=true
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    depends_on:
+      - loki
+      - jaeger
+    healthcheck:
+      test: [ "CMD", "wget", "--spider", "-q", "http://localhost:3000/api/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
 volumes:
   minio-data:
+    driver: local
+  loki-data:
+    driver: local
+  grafana-data:
     driver: local

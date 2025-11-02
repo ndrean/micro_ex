@@ -1,4 +1,4 @@
-defmodule ImageSvc.Metrics do
+defmodule JobSvc.Metrics do
   @moduledoc """
   Prometheus metrics for image_svc.
 
@@ -14,11 +14,11 @@ defmodule ImageSvc.Metrics do
 
   @impl true
   def init(_arg) do
-    Logger.info("[Image-Metrics] Starting Prometheus metrics exporter")
+    Logger.info("[Job-Metrics] Starting Prometheus metrics exporter")
 
     children = [
       # Define metrics and start the Prometheus Core (metrics only, no HTTP)
-      {TelemetryMetricsPrometheus.Core, metrics: metrics(), name: :image_svc_metrics}
+      {TelemetryMetricsPrometheus.Core, metrics: metrics(), name: :job_svc_metrics}
     ]
 
     Supervisor.init(children, strategy: :one_for_one)
@@ -28,16 +28,16 @@ defmodule ImageSvc.Metrics do
   defp metrics do
     [
       # HTTP request metrics (from Plug.Telemetry)
-      Telemetry.Metrics.counter("image_svc.plug.stop.duration",
-        event_name: [:image_svc, :plug, :stop],
+      Telemetry.Metrics.counter("job_svc.plug.stop.duration",
+        event_name: [:job_svc, :plug, :stop],
         measurement: :duration,
         unit: {:native, :millisecond},
         tags: [:route],
         tag_values: fn metadata -> %{route: metadata[:route] || "unknown"} end,
         description: "Total number of HTTP requests"
       ),
-      Telemetry.Metrics.distribution("image_svc.plug.stop.duration",
-        event_name: [:image_svc, :plug, :stop],
+      Telemetry.Metrics.distribution("job_svc.plug.stop.duration",
+        event_name: [:job_svc, :plug, :stop],
         measurement: :duration,
         unit: {:native, :millisecond},
         tags: [:route],
@@ -49,29 +49,29 @@ defmodule ImageSvc.Metrics do
       ),
 
       # Image conversion metrics
-      Telemetry.Metrics.counter("image_svc.conversion.count",
-        tags: [:status],
-        description: "Total number of image conversions"
-      ),
-      Telemetry.Metrics.distribution("image_svc.conversion.duration",
-        unit: {:native, :millisecond},
-        description: "Image conversion duration",
-        reporter_options: [buckets: [100, 500, 1000, 2000, 5000, 10_000, 30_000]]
-      ),
-      Telemetry.Metrics.distribution("image_svc.conversion.input_size",
-        unit: :byte,
-        description: "Input image size in bytes",
-        reporter_options: [
-          buckets: [1024, 10_240, 102_400, 512_000, 1_048_576, 5_242_880, 10_485_760]
-        ]
-      ),
-      Telemetry.Metrics.distribution("image_svc.conversion.output_size",
-        unit: :byte,
-        description: "Output PDF size in bytes",
-        reporter_options: [
-          buckets: [1024, 10_240, 102_400, 512_000, 1_048_576, 5_242_880, 10_485_760]
-        ]
-      ),
+      # Telemetry.Metrics.counter("image_svc.conversion.count",
+      #   tags: [:status],
+      #   description: "Total number of image conversions"
+      # ),
+      # Telemetry.Metrics.distribution("image_svc.conversion.duration",
+      #   unit: {:native, :millisecond},
+      #   description: "Job conversion duration",
+      #   reporter_options: [buckets: [100, 500, 1000, 2000, 5000, 10_000, 30_000]]
+      # ),
+      # Telemetry.Metrics.distribution("image_svc.conversion.input_size",
+      #   unit: :byte,
+      #   description: "Input image size in bytes",
+      #   reporter_options: [
+      #     buckets: [1024, 10_240, 102_400, 512_000, 1_048_576, 5_242_880, 10_485_760]
+      #   ]
+      # ),
+      # Telemetry.Metrics.distribution("image_svc.conversion.output_size",
+      #   unit: :byte,
+      #   description: "Output PDF size in bytes",
+      #   reporter_options: [
+      #     buckets: [1024, 10_240, 102_400, 512_000, 1_048_576, 5_242_880, 10_485_760]
+      #   ]
+      # ),
 
       # VM metrics (automatically collected by telemetry_poller)
       Telemetry.Metrics.last_value("vm.memory.total",
@@ -103,7 +103,7 @@ defmodule ImageSvc.Metrics do
   """
   def emit_conversion(status, duration_ms, input_size, output_size) do
     :telemetry.execute(
-      [:image_svc, :conversion],
+      [:job_svc, :conversion],
       %{
         duration: duration_ms,
         input_size: input_size,

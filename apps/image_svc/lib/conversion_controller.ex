@@ -52,11 +52,12 @@ defmodule ImageSvc.ConversionController do
         {"Conversion failed", "application/x-protobuf", ImageConversionResponseSchema}
     ]
   )
+
   def convert(conn) do
     with {:ok, request} <- decode_request(conn),
          {:ok, image_binary} <- fetch_image(request.image_url),
          {:ok, image_info} <- get_image_info(image_binary),
-         {:ok, output_size} <- perform_conversion(request, image_binary, image_info) do
+         {:ok, output_size} <- perform_conversion(request, image_binary) do
       response_binary = ResponseBuilder.build_ack_response(image_info, output_size)
 
       conn
@@ -120,7 +121,7 @@ defmodule ImageSvc.ConversionController do
 
   # Conversion workflow
 
-  defp perform_conversion(request, image_binary, image_info) do
+  defp perform_conversion(request, image_binary) do
     opts =
       ConversionOptions.build(
         request.input_format,
@@ -132,8 +133,8 @@ defmodule ImageSvc.ConversionController do
 
     with {:ok, pdf_binary} <-
            convert_to_pdf(image_binary, opts),
-         {:ok, store_response} <-
-           store_pdf(request, pdf_binary) |> dbg() do
+         {:ok, _store_response} <-
+           store_pdf(request, pdf_binary) do
       # Note: Client is already notified by user_svc/StoreImageController
       # No need for separate notification here
       Logger.info("[ConversionController] Conversion complete - client notified by user_svc")

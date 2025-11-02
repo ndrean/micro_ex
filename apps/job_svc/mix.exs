@@ -49,6 +49,16 @@ defmodule JobSvc.MixProject do
       {:opentelemetry, "~> 1.7"},
       {:tls_certificate_check, "~> 1.29"},
 
+      # Prometheus metrics
+      {:telemetry_metrics_prometheus_core, "~> 1.2"},
+      {:telemetry_poller, "~> 1.3"},
+
+      # Structured JSON logging
+      {:logger_json, "~> 7.0"},
+
+      # OpenAPI documentation
+      {:open_api_spex, "~> 3.21"},
+
       # Email
       {:ecto_sql, "~> 3.12"},
       {:ecto_sqlite3, "~> 0.18"},

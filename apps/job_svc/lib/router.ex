@@ -2,8 +2,14 @@ defmodule JobRouter do
   use Plug.Router
 
   plug(:match)
+  # Request ID for correlation across services
+  plug(Plug.RequestId)
 
-  plug(Plug.Telemetry, event_prefix: [:phoenix, :endpoint])
+  # Logger with request_id metadata
+  plug(Plug.Logger, log: :info)
+
+  # Telemetry for metrics
+  plug(Plug.Telemetry, event_prefix: [:job_svc, :plug])
 
   plug(Plug.Parsers,
     parsers: [:json],
@@ -29,6 +35,27 @@ defmodule JobRouter do
   # JobService.ConvertImage - Enqueue image conversion job
   post "/job_svc/ConvertImage" do
     ImageController.convert(conn)
+  end
+
+  # Health check endpoints
+  get "/health" do
+    # Simple liveness check
+    send_resp(conn, 200, "OK")
+  end
+
+  get "/health/ready" do
+    # Readiness check - verify dependencies
+    # TODO: Check MinIO, user_svc connectivity
+    send_resp(conn, 200, "READY")
+  end
+
+  # Prometheus metrics endpoint
+  get "/metrics" do
+    metrics = TelemetryMetricsPrometheus.Core.scrape(:job_svc_metrics)
+
+    conn
+    |> put_resp_content_type("text/plain; version=0.0.4")
+    |> send_resp(200, metrics)
   end
 
   match _ do

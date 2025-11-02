@@ -24,3 +24,18 @@ config :opentelemetry, :processors,
   }
 
 config :opentelemetry, :resource, service: %{name: "email service"}
+
+config :logger, :default_handler,
+  formatter:
+    {LoggerJSON.Formatters.Basic,
+     metadata: [
+       :request_id,
+       :service,
+       :trace_id,
+       :span_id,
+       :user_id,
+       :duration
+     ]}
+
+# Add service name to all logs
+config :logger, :default_formatter, metadata: [:service]

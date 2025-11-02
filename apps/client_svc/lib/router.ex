@@ -5,12 +5,24 @@ defmodule ClientRouter do
 
   # plug(Plug.Logger)  # Commented out for benchmarking
   plug(:match)
+
   plug(Plug.Parsers,
     parsers: [:json],
     json_decoder: Jason,
-    pass: ["application/protobuf"]  # Skip parsing protobuf
+    # Skip parsing protobuf
+    pass: ["application/protobuf"]
   )
+
   plug(:dispatch)
+
+  # Request ID for correlation across services
+  plug(Plug.RequestId)
+
+  # Logger with request_id metadata
+  plug(Plug.Logger, log: :info)
+
+  # Telemetry for metrics
+  plug(Plug.Telemetry, event_prefix: [:client_svc, :plug])
 
   # RPC-style protobuf endpoints (matches services.proto)
 
@@ -23,6 +35,28 @@ defmodule ClientRouter do
   post "/client_svc/PdfReady" do
     PdfReadyController.receive(conn)
   end
+
+  # Health check endpoints
+  get "/health" do
+    # Simple liveness check
+    send_resp(conn, 200, "OK")
+  end
+
+  get "/health/ready" do
+    # Readiness check - verify dependencies
+    # TODO: Check MinIO, user_svc connectivity
+    send_resp(conn, 200, "READY")
+  end
+
+  # Prometheus metrics endpoint
+  get "/metrics" do
+    metrics = TelemetryMetricsPrometheus.Core.scrape(:client_svc_metrics)
+
+    conn
+    |> put_resp_content_type("text/plain; version=0.0.4")
+    |> send_resp(200, metrics)
+  end
+
   # Unary-style endpoint - send user, get response
   # post "/user" do
   #   case conn.body_params do

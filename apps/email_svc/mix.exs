@@ -27,9 +27,7 @@ defmodule EmailSvc.MixProject do
     [
       extra_applications: [
         :logger,
-        :tls_certificate_check,
-        :opentelemetry,
-        :opentelemetry_exporter
+        :tls_certificate_check
       ],
       mod: {EmailApp, []}
     ]
@@ -41,6 +39,7 @@ defmodule EmailSvc.MixProject do
       {:bandit, "~> 1.8"},
       {:swoosh, "~> 1.19.8"},
       {:req, "~> 0.5.15"},
+      {:jason, "~> 1.4"},
       {:protobuf, "~> 0.15.0"},
 
       # Telemetry, OpenTelemetry for distributed tracing
@@ -50,6 +49,16 @@ defmodule EmailSvc.MixProject do
       {:opentelemetry_exporter, "~> 1.10"},
       {:opentelemetry, "~> 1.7"},
       {:tls_certificate_check, "~> 1.29"},
+
+      # Prometheus metrics
+      {:telemetry_metrics_prometheus_core, "~> 1.2"},
+      {:telemetry_poller, "~> 1.3"},
+
+      # Structured JSON logging
+      {:logger_json, "~> 7.0"},
+
+      # OpenAPI documentation
+      {:open_api_spex, "~> 3.21"},
       # inspect
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false}

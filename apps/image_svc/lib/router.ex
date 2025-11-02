@@ -35,19 +35,13 @@ defmodule ImageSvc.Router do
     send_resp(conn, 200, "READY")
   end
 
-  # Metrics info endpoint
+  # Prometheus metrics endpoint
   get "/metrics" do
-    conn
-    |> put_resp_content_type("text/plain")
-    |> send_resp(200, """
-    Prometheus metrics are available at:
-    http://localhost:9568/metrics
+    metrics = TelemetryMetricsPrometheus.Core.scrape(:image_svc_metrics)
 
-    Metrics include:
-    - HTTP request count and duration
-    - Image conversion count, duration, sizes
-    - VM memory and process counts
-    """)
+    conn
+    |> put_resp_content_type("text/plain; version=0.0.4")
+    |> send_resp(200, metrics)
   end
 
   # OpenAPI documentation endpoints

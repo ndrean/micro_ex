@@ -5,11 +5,14 @@ defmodule ClientApp do
   Entry point
   """
 
+  require Logger
+
   def start(_type, _args) do
-    IO.puts("Starting client_server 4000")
+    port = Application.get_env(:client_svc, :port, 4000)
+    Logger.info("Starting CLIENT Server on port #{port}")
 
     children = [
-      # ClientTelem.Telemetry,
+      ClientSvc.Metrics,
       {Bandit, plug: ClientRouter, port: 4000}
     ]
 
