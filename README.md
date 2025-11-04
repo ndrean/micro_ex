@@ -1,60 +1,192 @@
 # Microservices with Elixir and HTTP "twirp" like communication
 
-This is an **Elixir-based microservices architecture** demonstrating PNG-to-PDF image conversion with email notifications. The system uses:
+This is a demo of an **Plug/Elixir-based microservices architecture** demonstrating PNG-to-PDF image conversion with email notifications. The system uses:
 
-- **Plug/Bandit** for HTTP servers
+- **Plug** only Elixir app (no Phoenix)
+- **Bandit** for HTTP servers
 - **Protobuf** for inter-service communication serialization
 - **Oban** for background job processing backed with **SQLite**
 - **Req** for HTTP client
 - **Swoosh** for email delivery
 - **ImageMagick** for image conversion
 - **MinIO** for S3 compatible local-cloud storage
+- **OpenTelemetry** with **Jaeger** for traces
+- **Promtail** with **Loki** linked to MinIO for logs
+-  **Prometheus** for metrics
 
 We run 5 Elixir apps as microservices communicating via **Protobuf serialization over HTTP/1**, providing strong type safety and a contract-first approach.
 
 Routes follow a **Twirp-like RPC DSL** (`/service_name/MethodName`) instead of traditional REST (`/resource/`)
 
-**Observability Stack**
+## Observability Stack
 
-┌────────────────────────────────────────────────────----──┐
-│ 1️⃣ TRACING (Jaeger) - "What path did the request take?"  │
-│    ✅ http://localhost:16686                             │
-│    └─ See full request journey across services           │
-├────────────────────────────────────────────────----──────┤
-│ 2️⃣ LOGS (Loki + Grafana) - "What happened and why?"      │
-│    ✅ http://localhost:3000 (Grafana)                    │
-│    └─ Centralized logs from all services                 │
-│    └─ Filter by: service, request_id, level              │
-├────────────────────────────────────────────────----──────┤
-│ 3️⃣ METRICS (Prometheus) - "How much CPU/memory/time?"    │
-│    🔧 Needs bucket fix in metrics.ex                     │
-│    └─ Will show: CPU, memory, latency, request rate      │
-└───────────────────────────────────────────────────----───┘
-
-HTTP Request: GET /health
-        │
-        ├──> 📝 LOGS (Plug.Logger)
-        │     └─> JSON → Loki → Grafana
-        │         {"message":"GET /health", "request_id":"abc123"}
-        │
-        └──> 📊 METRICS (Plug.Telemetry)
-              └─> Numbers → Prometheus
-                  http_request_count{path="/health"} 1
-                  http_request_duration_ms 15
+| System	| Purpose	| Data Type	| Retention |
+| --     | --        | --        | --        |
+| Prometheus | Metrics | Numbers (counters, gauges)| Days/Weeks |
+| Loki| Logs| Text events| Days/Weeks |
+| Jaeger |Traces| Request flows | Hours/Days |
 
 
-Using driver `loki`: 
+
+- METRICS: `Prometheus`
+  "How much CPU/memory/time?
+  "What's my p95 latency?"
+  "How many requests per second?"
+  "Is memory usage growing?"
+  "Which endpoint is slowest?"
+
+- LOGS: `Loki`
+  Centralized logs from all services
+  "Show me all errors in the last hour"
+  "What did user X do?"
+  "Find logs containing 'timeout'"
+  "What happened before the crash?"
+
+- TRACING: `Jaeger`
+  Full journey accross services
+  "Which service is slow in this request?"
+  "How does a request flow through services?"
+  "Where did this request fail?"
+  "What's the call graph?"
+
+
+> We used RPC-style endpoints (not RESTful API with dynamic segments) which makes observability easy (no `:id` in static paths).
+
+|   System    |   Model     |   Format    |    Storage      |
+|--           | --          | --          |--               |
+| Prometheus  | PULL (scrape)| Plain text  | Disk (TS-DB)     |
+|  | GET /metrics Every 15s | key=value   | prometheus-data  |
+| Loki via Promtail       | PUSH  Batched       | JSON (logs) structured| MinIO (S3) loki-chunks     |
+| Jaeger      | PUSH OTLP        | Protobuf (spans)   │|Memory only! Lost on restart   |
+| Grafana     | N/A (UI)     | N/A         | SQLite   (dashboards only)       |
+
+
+Tracing: headers are injected to follow the trace
+
+
+
+### Services
+
+<img src="priv/process_architecture.png" >
+
+<details>
+<summary>Containers</summary>
+
+```mermaid
+---
+title: Services
+---
+    flowchart TD
+        subgraph SVC[microservices]
+            MS[All microservices<br>---<br> stdout]
+            MSOT[microservice<br>OpenTelemetry]
+        end
+        MS-->|stream| Promtail
+        Promtail -->|:3100| Loki
+        Loki -->|:3100| Grafana
+        Loki <-.->|:9000| MinIO
+        Jaeger -->|:16686| Grafana
+        Grafana -->|:3000| Browser
+        MinIO -->|:9001| Browser
+        MSOT -->|:4318| Jaeger
+```
+</details>
+
+### Logs pipeline
+
+<img src="priv/log-pipeline.png">
+
+<details>
+<summary>Logs pipeline</summary>
+
+```mermaid
+flowchart TB
+    subgraph Services[Microservices]
+        U[User Svc<br>--<br>Logger.info]
+        W[Job Svc<br><br>--<br>Logger.info]
+        E[Email Svc<br><br>--<br>Logger.info]
+        I[Image Svc<br><br>--<br>Logger.info]
+    end
+
+    subgraph Logs[Logs Pipeline]
+        O(stdout<br>Plain text or JSON)
+        PromSt[PROMTAIL:9080<br>JSON parsing<br>buffer<br>labels extraction]
+        L[LOKI:3100<br>in-memory chunks<br>build index]
+        S3[(S3 - MinIO<br>loki-chunks bucket)]
+    end
+
+    subgraph Monitor[Monitoring Access]
+        M[Prometheus/curl<br>GET :9080<br>/metrics<br>/targets<br>/ready <br> <br> GET :3100 <br> /loki/api/v1/query_range]
+    end
+
+    U --> O
+    W --> O
+    E --> O
+    I --> O
+    O o--o|stream via<br>Docker socket <br> or <br> K8 DaemonSet| PromSt
+    PromSt -->|batch ~1s<br>POST:3100<br>JSON + gzip| L
+    L -->|flush every ~10min<br>chunks + index| S3
+    S3 -.->|read for<br>old queries| L
+    M -.->|query API <br> :9080| PromSt
+    M-.->|query API <br> :3100| L
+
+    Grafana[GRAFANA<br> GET:3100 <br>/loki/api/v1/query_range] -->|GET| L
+```
+</details>
+
+### Trace pipeline
+
+<img src="priv/trace-pipeline.png">
+
+<details>
+<summary>CTrace pipeline</summary>
+
+```mermaid
+---
+title: Application Services and Trace pipeline
+--- 
+
+flowchart TD
+    subgraph Traces[Trace Producers]
+        UE[User Svc<br> --- <br> OpenTelemetry SDK<br>buffer structured spans]
+        WE[Job Svc<br> --- <br>OpenTelemetry SDK<br>buffer structured spans]
+        EE[Email Svc<br>--- <br> OpenTelemetry SDK<br>buffer structured spans]
+        IE[Image Svc<br> --- <br>OpenTelemetry SDK<br>buffer structured spans]
+        
+    end
+
+    subgraph Cons[Traces consumer]
+        J[Jaeger:16686<br>in-memory<br>traces]
+    end
+
+    subgraph Viz[Traces visulizers]
+        G[Grafana:3000]
+        UI[Browser]
+    end
+
+    WE -->|batch ~5s <br> POST:4318<br> protobuf|J
+    EE -->|batch ~5s<br>POST:4318<br> protobuf|J
+    UE -->|batch ~5s<br>POST:4318<br> protobuf|J
+    IE -->|batch ~5s<br>POST:4318<br> protobuf|J
+
+    G[GRAFANA<br>] -->|GET:16686<br>/api/traces|J
+    UI-->|:3000| G
+    UI-->|:16686|J
+```
+</details>
+
+
+If you run  locally with Docker, you can use the Docker daemon and use a `loki` driver to read and push the logs from stdout (in the docker socket) to Loki. We used instead `Promtail` to consume the logs and push them to Loki. This solution is more K8 ready.
+
+> To use a local `loki` driver, we need to isntall it:
 
 ```sh
 docker plugin install grafana/loki-docker-driver:latest --alias loki --grant-all-permissions
 ```
 
-**Key Patterns Demonstrated**:
-
-- **Pull Model & Presigned URLs**: Image service fetches data on-demand via temporary URLs (using AWS S3 pattern)
-- **Concurrent Flow**: `Task.async_stream` for parallel client requests and Oban for true async background jobs; workers poll the database independently, fully decoupled from the request flow with automatic retry logic.
 
 ## Prerequisites
+
 
 Before running this project, ensure you have the following installed on your system:
 
@@ -117,9 +249,6 @@ See [MINIO_SETUP.md](MINIO_SETUP.md) for detailed MinIO configuration and troubl
 
 <img src="priv/architecture.png" >
 
-```mermaid
-  info
-```
 
 <details>
 <summary>Architecture</summary>
@@ -127,20 +256,35 @@ See [MINIO_SETUP.md](MINIO_SETUP.md) for detailed MinIO configuration and troubl
 ```mermaid
 architecture-beta
     group api(cloud)[API]
-    service client(internet)[Client] in api
-    service s3(cloud)[MinIO storage] in api
-    service user(server)[User Proxy service] in api
-    service job(server)[Job Workers service] in api
-    service db(database)[Database queue] in api
-    service email(internet)[SMTP service] in api
-    service image(disk)[Image Convertor service] in api
+    group logs(cloud)[LOGS]
+    service client(internet)[Client_4000] in api
+    service s3(disk)[S3_9000 MinIO] in api
+    service user(server)[User_8081 service] in api
+    service job(server)[Oban_8082 service] in api
+    service db(database)[DB_5432] in api
+    service email(internet)[SMTP_8084 service] in api
+    service image(disk)[Image_8083 service] in api
+    
+    service loki(cloud)[Loki_3100 aggregator] in logs
+    service promtail(disk)[Promtail_9080 pushes] in logs
+    service jaeger(cloud)[Jaeger_4318 traces] in logs
+    service sdtout(cloud)[SDTOUT DaemonSet] in logs
+    service s3-logs(disk)[S3_9000 MinIO] in logs
+
 
     client:R -- L:user
+    job:R -- L:s3
     job:B -- T:user
     email:R -- L:job
     image:B -- T:job
     db:L -- R:job
     user:R -- L:s3
+
+    sdtout:R --> L:jaeger
+    sdtout:B --> T:promtail
+    loki:L <-- R:promtail
+    loki:B -- T:s3-logs
+    
 ```
 
 </details>
@@ -204,6 +348,7 @@ architecture-beta
 - **Endpoints**: `/image_svc/ConvertImage`
 
 ## Technology Stack
+
 
 ### Protobuf
 
@@ -444,6 +589,11 @@ This workflow demonstrates efficient binary data handling using the "Pull Model"
 
 <img src="priv/image-sequence.png">
 
+**Key Patterns Demonstrated**:
+
+- **Pull Model & Presigned URLs**: Image service fetches data on-demand via temporary URLs (using AWS S3 pattern)
+- **Concurrent Flow**: `Task.async_stream` for parallel client requests and Oban for true async background jobs; workers poll the database independently, fully decoupled from the request flow with automatic retry logic.
+
 
 **Problem**: We cannot pass the image binary through the chain as each step would copy the image, causing memory pressure.
 
@@ -551,3 +701,56 @@ This workflow demonstrates efficient binary data handling using the "Pull Model"
 
 10. user_svc → client_svc
     ⚠️ :nxdomain (EXPECTED - client_svc is local, not in Docker)
+
+
+## Docker setup
+
+- Setup the `watch` in _docker-compose.yml_ (rebuilds on code change)
+
+```yml
+develop:
+      watch:
+        - action: rebuild
+          path: ./apps/client_svc/lib
+        - action: rebuild
+          path: ./apps/client_svc/mix.exs
+```
+
+- Run the _watch_ mode:
+
+```sh
+docker compose up --watch
+```
+
+- Execute Elixir commands on the _client_service_ container:
+
+```sh
+docker exec -it msvc-client-svc bin/client_svc remote
+
+# Interactive Elixir (1.19.2) - press Ctrl+C to exit (type h() ENTER for help)
+# iex(client_svc@ba41c71bacac)1>
+```
+
+## COCOMO
+
+Install and run [scc](https://github.com/boyter/scc), a code counter with complexity calculations and COCOMO estimates.
+Note that it excludes files from .gitignore (deps, node_modules...).
+
+───────────────────────────────────────────────────────────────────────────────
+Language                 Files     Lines   Blanks  Comments     Code Complexity
+───────────────────────────────────────────────────────────────────────────────
+Elixir                      93      6113     1098       819     4196        365
+Markdown                     8       923      231         0      692          0
+YAML                         7      1025       70        98      857          0
+Dockerfile                   5       344       86        92      166         16
+Protocol Buffers             5       310       50        86      174          0
+Docker ignore                2        63       15        18       30          0
+Shell                        1        28        4         3       21          2
+───────────────────────────────────────────────────────────────────────────────
+Total                      121      8806     1554      1116     6136        383
+───────────────────────────────────────────────────────────────────────────────
+Estimated Cost to Develop (organic) $181,499
+Estimated Schedule Effort (organic) 7.19 months
+Estimated People Required (organic) 2.24
+───────────────────────────────────────────────────────────────────────────────
+

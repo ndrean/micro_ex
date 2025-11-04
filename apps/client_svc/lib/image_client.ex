@@ -39,10 +39,10 @@ defmodule ImageClient do
       %Mcsv.UserResponse{ok: true, message: "Image conversion job enqueued..."}
   """
   def convert_png(png_path, user_email, opts \\ []) do
-    Tracer.with_span "#{__MODULE__}.create/1" do
-      Tracer.set_attribute(:value, user_email)
-      :ok
-    end
+    # Tracer.with_span "#{__MODULE__}.create/1" do
+    #   Tracer.set_attribute(:value, user_email)
+    #   :ok
+    # end
 
     # Read PNG file
     png_binary = File.read!(png_path)
@@ -69,32 +69,17 @@ defmodule ImageClient do
     IO.puts("Protobuf request: #{format_bytes(protobuf_size)}")
     IO.puts("Sending to User service...")
 
-    # Measure request time
-    {time_us, response} =
-      :timer.tc(fn ->
-        response =
-          Req.post(
-            Req.new(base_url: base_user_url()),
-            url: user_endpoints().convert_image,
-            body: request_binary,
-            headers: [{"content-type", "application/protobuf"}],
-            receive_timeout: 5_000
-          )
+    # Send request using Req with base_url pattern
+    response =
+      Req.new(base_url: base_user_url())
+      |> OpentelemetryReq.attach(propagate_trace_headers: true)
+      |> Req.post!(
+        url: user_endpoints().convert_image,
+        body: request_binary,
+        headers: [{"content-type", "application/protobuf"}]
+      )
 
-        case response do
-          {:ok, %{status: 200, body: body}} ->
-            Mcsv.UserResponse.decode(body)
-
-          msg ->
-            raise "Error: #{inspect(msg)}"
-        end
-      end)
-
-    time_ms = time_us / 1000
-
-    IO.puts("Response in #{time_ms}ms: #{response.message}")
-
-    response
+    Mcsv.UserResponse.decode(response.body)
   end
 
   @doc """
@@ -106,17 +91,23 @@ defmodule ImageClient do
       {2, 0}  # {success_count, failed_count}
   """
   def convert_many_pngs(png_paths, opts \\ []) do
-    concurrency = Keyword.get(opts, :concurrency, 5)
+    concurrency = Keyword.get(opts, :concurrency, 10)
     user_email = Keyword.get(opts, :email, "test@example.com")
 
     IO.puts("Converting #{length(png_paths)} images with concurrency #{concurrency}...")
 
     start_time = System.monotonic_time(:millisecond)
 
+    # Capture current OpenTelemetry context to propagate to spawned tasks
+    ctx = OpenTelemetry.Ctx.get_current()
+
     result =
       png_paths
       |> Task.async_stream(
         fn path ->
+          # Attach parent context in spawned process
+          OpenTelemetry.Ctx.attach(ctx)
+
           convert_png(path, user_email, opts)
         end,
         max_concurrency: concurrency,

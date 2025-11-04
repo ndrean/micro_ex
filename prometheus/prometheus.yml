@@ -1,0 +1,50 @@
+global:
+  scrape_interval: 15s # Scrape metrics every 15 seconds
+  evaluation_interval: 15s # Evaluate rules every 15 seconds
+
+# Scrape configurations for each service
+scrape_configs:
+  # User Service metrics
+  - job_name: 'user_svc'
+    static_configs:
+      - targets: ['user_svc:8081']
+        labels:
+          service: 'user_svc'
+          environment: 'dev'
+
+  # Client Service metrics
+  - job_name: 'client_svc'
+    static_configs:
+      - targets: ['client_svc:4000']
+        labels:
+          service: 'client_svc'
+          environment: 'dev'
+
+  # Job Service metrics
+  - job_name: 'job_svc'
+    static_configs:
+      - targets: ['job_svc:8082']
+        labels:
+          service: 'job_svc'
+          environment: 'dev'
+
+  # Image Service metrics
+  - job_name: 'image_svc'
+    static_configs:
+      - targets: ['image_svc:8084']
+        labels:
+          service: 'image_svc'
+          environment: 'dev'
+
+  # Email Service metrics
+  - job_name: 'email_svc'
+    static_configs:
+      - targets: ['email_svc:8083']
+        labels:
+          service: 'email_svc'
+          environment: 'dev'
+
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']

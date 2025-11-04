@@ -10,6 +10,9 @@ defmodule EmailRouter do
   # Telemetry for metrics (BEFORE :match)
   plug(Plug.Telemetry, event_prefix: [:email_svc, :plug])
 
+  # Extract OpenTelemetry trace context from incoming requests
+  plug(EmailSvc.OpenTelemetryPlug)
+
   plug(:match)
 
   plug(Plug.Parsers,

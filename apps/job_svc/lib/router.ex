@@ -2,7 +2,6 @@ defmodule JobRouter do
   @moduledoc false
   use Plug.Router
 
-  plug(:match)
   # Request ID for correlation across services
   plug(Plug.RequestId)
 
@@ -11,6 +10,11 @@ defmodule JobRouter do
 
   # Telemetry for metrics
   plug(Plug.Telemetry, event_prefix: [:job_svc, :plug])
+
+  # Extract OpenTelemetry trace context from incoming requests
+  plug(JobSvc.OpenTelemetryPlug)
+
+  plug(:match)
 
   plug(Plug.Parsers,
     parsers: [:json],

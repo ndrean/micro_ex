@@ -34,7 +34,7 @@ defmodule StoreImageController do
     - size: File size in bytes
   """
   def store(conn) do
-    with {:ok, request} <- decode_request(conn),
+    with {:ok, request, conn} <- decode_request(conn),
          :ok <- validate_request(request),
          {:ok, storage_id, presigned_url} <- store_image(request),
          :ok <- maybe_notify_client(request, storage_id, presigned_url) do
@@ -68,7 +68,7 @@ defmodule StoreImageController do
   # Request processing
 
   defp decode_request(conn) do
-    {:ok, binary_body, _conn} = read_body(conn)
+    {:ok, binary_body, new_conn} = read_body(conn)
 
     request = Mcsv.StoreImageRequest.decode(binary_body)
 
@@ -77,7 +77,7 @@ defmodule StoreImageController do
         "(#{byte_size(request.image_data)} bytes)"
     )
 
-    {:ok, request}
+    {:ok, request, new_conn}
   end
 
   defp validate_request(request) do

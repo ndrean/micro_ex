@@ -21,11 +21,17 @@ defmodule JobService.Workers.EmailWorker do
 
   @spec perform(Oban.Job.t()) :: :ok | {:error, any()}
   def perform(%Oban.Job{args: %{"type" => "welcome"} = args}) do
+    # Extract and attach OpenTelemetry trace context from job args
+    attach_trace_context(args)
+
     Logger.info("[EmailWorker] Sending #{args["type"]} email to user #{args["id"]}")
     EmailSvcClient.send_email(args)
   end
 
   def perform(%Oban.Job{args: %{"type" => "notification"} = args}) do
+    # Extract and attach OpenTelemetry trace context from job args
+    attach_trace_context(args)
+
     Logger.info("[EmailWorker] Sending notification email to user #{args["user_id"]}")
     EmailSvcClient.send_email(args)
   end
@@ -34,4 +40,13 @@ defmodule JobService.Workers.EmailWorker do
     Logger.error("[EmailWorker] Unknown email type: #{inspect(args)}")
     {:error, "Unknown email type"}
   end
+
+  # Extract OpenTelemetry trace context from job args and attach to current process
+  defp attach_trace_context(%{"_otel_trace_context" => trace_context}) when is_map(trace_context) do
+    # Convert map back to list of tuples for extraction
+    trace_headers = Enum.into(trace_context, [])
+    :otel_propagator_text_map.extract(trace_headers)
+  end
+
+  defp attach_trace_context(_args), do: :ok
 end

@@ -12,11 +12,11 @@ defmodule CreateUserController do
   import Plug.Conn
 
   def create(conn) do
-    with {:ok, binary_body, _conn} <-
+    with {:ok, binary_body, new_conn} <-
            read_body(conn),
          {:ok, resp_binary} <-
            Clients.JobSvcClient.enqueue_email(binary_body) do
-      conn
+      new_conn
       |> put_resp_content_type("application/protobuf")
       |> send_resp(200, resp_binary)
     else

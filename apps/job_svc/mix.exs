@@ -46,9 +46,11 @@ defmodule JobSvc.MixProject do
       # OpenTelemetry for distributed tracing
       {:opentelemetry_exporter, "~> 1.10"},
       {:opentelemetry_api, "~> 1.5"},
-      {:opentelemetry_oban, "~> 1.1"},
+      # Disabled: conflicts with opentelemetry_req semconv version
+      # {:opentelemetry_oban, "~> 1.1"},
       {:opentelemetry_ecto, "~> 1.2"},
       {:opentelemetry, "~> 1.7"},
+      {:opentelemetry_req, "~> 1.0"},
       {:tls_certificate_check, "~> 1.29"},
 
       # Prometheus metrics
@@ -61,7 +63,13 @@ defmodule JobSvc.MixProject do
       # OpenAPI documentation
       {:open_api_spex, "~> 3.21"},
 
-      # Email
+      # MinIO / S3 (for cleanup worker)
+      {:ex_aws, "~> 2.5"},
+      {:ex_aws_s3, "~> 2.5"},
+      {:hackney, "~> 1.20"},
+      {:sweet_xml, "~> 0.7"},
+
+      # Database
       {:ecto_sql, "~> 3.12"},
       {:ecto_sqlite3, "~> 0.18"},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},

@@ -11,6 +11,9 @@ defmodule ImageSvc.Router do
   # Telemetry for metrics
   plug(Plug.Telemetry, event_prefix: [:image_svc, :plug])
 
+  # Extract OpenTelemetry trace context from incoming requests
+  plug(ImageSvc.OpenTelemetryPlug)
+
   plug(:match)
 
   plug(Plug.Parsers,

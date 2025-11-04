@@ -12,6 +12,9 @@ defmodule ClientRouter do
   # Telemetry for metrics (BEFORE :match)
   plug(Plug.Telemetry, event_prefix: [:client_svc, :plug])
 
+  # Extract OpenTelemetry trace context from incoming requests
+  plug(ClientSvc.OpenTelemetryPlug)
+
   plug(:match)
 
   plug(Plug.Parsers,
@@ -36,7 +39,7 @@ defmodule ClientRouter do
   end
 
   # Health check endpoints
-  get "/health" do
+  match "/health", via: [:get, :head] do
     # Simple liveness check
     send_resp(conn, 200, "OK")
   end

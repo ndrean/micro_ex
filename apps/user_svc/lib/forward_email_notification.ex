@@ -14,14 +14,14 @@ defmodule ForwardEmailNotificationController do
   alias Clients.ClientSvcClient
 
   def forward(conn) do
-    with {:ok, response} <- decode_response(conn),
+    with {:ok, response, new_conn} <- decode_response(conn),
          :ok <- maybe_forward_to_client(response) do
-
-      conn
+      new_conn
       |> send_resp(204, "")
     else
       {:error, reason} ->
         Logger.error("[ForwardEmailNotificationController] Failed: #{inspect(reason)}")
+
         conn
         |> send_resp(204, "")
     end
@@ -30,14 +30,12 @@ defmodule ForwardEmailNotificationController do
   # Request processing
 
   defp decode_response(conn) do
-    {:ok, binary_body, _conn} = read_body(conn)
+    {:ok, binary_body, conn} = read_body(conn)
     response = Mcsv.EmailResponse.decode(binary_body)
 
-    Logger.info(
-      "[ForwardEmailNotificationController] Email delivery status: #{response.success}"
-    )
+    Logger.info("[ForwardEmailNotificationController] Email delivery status: #{response.success}")
 
-    {:ok, response}
+    {:ok, response, conn}
   end
 
   defp maybe_forward_to_client(response) do
@@ -45,7 +43,10 @@ defmodule ForwardEmailNotificationController do
       Logger.info("[ForwardEmailNotificationController] Forwarding success to client_svc")
       ClientSvcClient.receive_notification(response.message)
     else
-      Logger.warning("[ForwardEmailNotificationController] Email delivery failed: #{response.message}")
+      Logger.warning(
+        "[ForwardEmailNotificationController] Email delivery failed: #{response.message}"
+      )
+
       :ok
     end
   end

@@ -36,7 +36,13 @@ defmodule Clients.ClientSvcClient do
       |> Mcsv.PdfReadyNotification.encode()
 
     # Send async notification (don't block on response)
+    # Capture current context to propagate to spawned task
+    ctx = OpenTelemetry.Ctx.get_current()
+
     Task.start(fn ->
+      # Attach parent context in spawned process
+      OpenTelemetry.Ctx.attach(ctx)
+
       case post(base_url(), endpoints().pdf_ready, notification) do
         {:ok, %{status: 204}} ->
           Logger.info("[ClientSvcClient] Client notified successfully")
@@ -86,7 +92,8 @@ defmodule Clients.ClientSvcClient do
     receive_timeout = Keyword.get(opts, :receive_timeout, 5_000)
 
     case Req.post(
-           Req.new(base_url: base),
+           Req.new(base_url: base)
+           |> OpentelemetryReq.attach(propagate_trace_headers: true),
            url: path,
            body: body,
            headers: [{"content-type", "application/protobuf"}],

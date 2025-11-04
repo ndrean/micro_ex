@@ -62,11 +62,13 @@ defmodule JobService.Clients.ImageSvcClient do
 
   # Private HTTP helper
 
+  @spec post(binary(), binary(), binary(), list()) :: {:ok, any()} | {:error, any()}
   defp post(base, path, body, opts \\ []) do
     receive_timeout = Keyword.get(opts, :receive_timeout, 60_000)
 
     case Req.post(
-           Req.new(base_url: base),
+           Req.new(base_url: base)
+           |> OpentelemetryReq.attach(propagate_trace_headers: true),
            url: path,
            body: body,
            headers: [{"content-type", "application/protobuf"}],

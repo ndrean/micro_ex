@@ -3,7 +3,7 @@ defmodule DeliveryController do
   require Logger
 
   def send(conn) do
-    {:ok, binary_body, conn} = Plug.Conn.read_body(conn)
+    {:ok, binary_body, new_conn} = Plug.Conn.read_body(conn)
 
     # Decode protobuf and pattern match!
 
@@ -15,13 +15,13 @@ defmodule DeliveryController do
 
     case type do
       "welcome" ->
-        deliver_and_confirm(conn, "welcome", email, name)
+        deliver_and_confirm(new_conn, "welcome", email, name)
 
       "notification" ->
-        deliver_and_confirm(conn, "notification", email, name)
+        deliver_and_confirm(new_conn, "notification", email, name)
 
       _ ->
-        conn |> send_resp(400, "Unknown email type")
+        new_conn |> send_resp(400, "Unknown email type")
     end
   end
 

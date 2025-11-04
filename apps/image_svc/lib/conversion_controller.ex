@@ -54,7 +54,7 @@ defmodule ImageSvc.ConversionController do
   )
 
   def convert(conn) do
-    with {:ok, request} <- decode_request(conn),
+    with {:ok, request, conn} <- decode_request(conn),
          {:ok, image_binary} <- fetch_image(request.image_url),
          {:ok, image_info} <- get_image_info(image_binary),
          {:ok, output_size} <- perform_conversion(request, image_binary) do
@@ -79,8 +79,8 @@ defmodule ImageSvc.ConversionController do
 
   defp decode_request(conn) do
     case Plug.Conn.read_body(conn) do
-      {:ok, binary_body, _conn} ->
-        {:ok, Mcsv.ImageConversionRequest.decode(binary_body)}
+      {:ok, binary_body, new_conn} ->
+        {:ok, Mcsv.ImageConversionRequest.decode(binary_body), new_conn}
 
       {:error, reason} ->
         {:error, reason}

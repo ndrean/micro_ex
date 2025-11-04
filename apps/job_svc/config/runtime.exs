@@ -22,7 +22,9 @@ config :job_svc,
   },
   job_svc_endpoints: %{
     notify_email_delivery: "/job_svc/NotifyEmailDelivery"
-  }
+  },
+  image_bucket: System.get_env("IMAGE_BUCKET", "msvc-images"),
+  image_bucket_max_age: System.get_env("IMAGE_BUCKET_MAX_AGE", "3600")
 
 # Database configuration (SQLite)
 # In Docker: /app/db/job_service.db
@@ -34,6 +36,19 @@ config :job_svc, JobService.Repo,
   pool_size: String.to_integer(System.get_env("DB_POOL_SIZE", "5")),
   stacktrace: true,
   show_sensitive_data_on_connection_error: true
+
+# MinIO / S3 Configuration (for storage cleanup worker)
+config :ex_aws,
+  access_key_id: System.get_env("MINIO_ACCESS_KEY", "minioadmin"),
+  secret_access_key: System.get_env("MINIO_SECRET_KEY", "minioadmin"),
+  region: System.get_env("AWS_REGION", "us-east-1"),
+  json_codec: Jason
+
+config :ex_aws, :s3,
+  scheme: System.get_env("MINIO_SCHEME", "http://"),
+  host: System.get_env("MINIO_HOST", "localhost"),
+  port: System.get_env("MINIO_PORT", "9000") |> String.to_integer(),
+  region: System.get_env("AWS_REGION", "us-east-1")
 
 # OpenTelemetry Configuration
 config :opentelemetry,

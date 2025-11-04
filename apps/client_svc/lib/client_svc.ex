@@ -73,9 +73,15 @@ defmodule Client do
 
     # 1..count
 
-    Stream.interval(100)
+    # Capture current OpenTelemetry context to propagate to spawned tasks
+    ctx = OpenTelemetry.Ctx.get_current()
+
+    Stream.interval(10)
     |> Task.async_stream(
       fn i ->
+        # Attach parent context in spawned process
+        OpenTelemetry.Ctx.attach(ctx)
+
         # Build and send each user request
         %Mcsv.UserRequest{
           id: "#{i}",
@@ -111,6 +117,7 @@ defmodule Client do
     binary = Mcsv.UserRequest.encode(user)
 
     Req.new(base_url: base)
+    |> OpentelemetryReq.attach(propagate_trace_headers: true)
     |> Req.post(
       url: uri,
       body: binary,

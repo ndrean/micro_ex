@@ -1,0 +1,49 @@
+# Git
+.git
+.gitignore
+
+# Mix artifacts (will be built fresh in container)
+/_build
+/deps
+*.ez
+
+# Elixir artifacts
+erl_crash.dump
+*.beam
+
+# Testing
+/test
+/cover
+
+# Temporary files
+/tmp
+
+# IDE
+.elixir_ls
+.vscode
+.idea
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Documentation
+/doc
+README.md
+
+# Docker files
+Dockerfile
+.dockerignore
+
+# Test images in root (but keep priv/ directory)
+# Only exclude images in the root of the project, not in priv/
+/*.png
+/*.jpg
+/*.pdf
+
+# Development config
+.formatter.exs
+.credo.exs

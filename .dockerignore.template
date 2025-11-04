@@ -1,0 +1,84 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Mix artifacts (will be built fresh in container)
+/_build
+/deps
+*.ez
+
+# Elixir artifacts
+erl_crash.dump
+*.beam
+
+# Mix lock file (copied separately in Dockerfile)
+# mix.lock
+
+# Testing
+/test
+/cover
+*.coverdata
+
+# Temporary files
+/tmp
+/temp
+
+# IDE and editor files
+.elixir_ls
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+*.bak
+
+# Logs
+*.log
+/log
+
+# Documentation
+/doc
+/docs
+README.md
+*.md
+
+# CI/CD
+.github
+.gitlab-ci.yml
+.travis.yml
+Jenkinsfile
+
+# Docker files (no need to copy these into the image)
+Dockerfile
+.dockerignore
+docker-compose.yml
+
+# SQLite databases (will be created in container volumes)
+*.db
+*.db-shm
+*.db-wal
+
+# Development config
+.env
+.env.*
+!.env.example
+
+# Formatter and linters
+.formatter.exs
+.credo.exs
+
+# Node modules (if any)
+node_modules
+npm-debug.log
+
+# Hex
+hex_metadata.config
+
+# Release artifacts from local builds
+/_build/prod
+/rel

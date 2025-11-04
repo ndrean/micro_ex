@@ -52,12 +52,17 @@ defmodule EmailSenderController do
 
   @spec injob_email(map()) :: {:ok, Oban.Job.t()} | {:error, any()}
   defp injob_email(%{type: "welcome"} = params) do
+    # Inject OpenTelemetry trace context into job args
+    trace_headers = :otel_propagator_text_map.inject([])
+    trace_context = Map.new(trace_headers)
+
     %{
       "id" => params.id,
       "email" => params.email,
       "name" => params.name,
       "bio" => params.bio,
-      "type" => params.type
+      "type" => params.type,
+      "_otel_trace_context" => trace_context
     }
     |> JobService.Workers.EmailWorker.new()
     |> Oban.insert()

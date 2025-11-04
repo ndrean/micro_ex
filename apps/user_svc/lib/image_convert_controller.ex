@@ -18,14 +18,14 @@ defmodule ConvertImageController do
   defp user_svc_base_url, do: Application.get_env(:user_svc, :user_svc_base_url)
 
   def convert(conn) do
-    with {:ok, %Mcsv.ImageConversionRequest{} = request} <-
+    with {:ok, %Mcsv.ImageConversionRequest{} = request, new_conn} <-
            decode_client_request(conn),
          {:ok, storage_id} <-
            store_image(request),
          {:ok, bin_message} <-
            forward_to_job_svc(request, storage_id) do
       # respond back to Client
-      conn
+      new_conn
       |> put_resp_content_type("application/protobuf")
       |> send_resp(200, bin_message)
     else
@@ -46,8 +46,8 @@ defmodule ConvertImageController do
 
   defp decode_client_request(conn) do
     case read_body(conn) do
-      {:ok, binary_body, _conn} ->
-        {:ok, Mcsv.ImageConversionRequest.decode(binary_body)}
+      {:ok, binary_body, new_conn} ->
+        {:ok, Mcsv.ImageConversionRequest.decode(binary_body), new_conn}
 
       {:error, reason} ->
         {:error, reason}

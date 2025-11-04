@@ -16,7 +16,17 @@ defmodule ImageSvc.Metrics do
   def init(_arg) do
     Logger.info("[Image-Metrics] Starting Prometheus metrics exporter")
 
+    # Ensure :os_mon application is started for CPU measurements
+    Application.ensure_all_started(:os_mon)
+
     children = [
+      # Telemetry poller for custom measurements (CPU utilization)
+      {:telemetry_poller,
+       measurements: [
+         {__MODULE__, :measure_cpu_utilization, []}
+       ],
+       period: :timer.seconds(5),
+       name: :image_svc_poller},
       # Define metrics and start the Prometheus Core (metrics only, no HTTP)
       {TelemetryMetricsPrometheus.Core, metrics: metrics(), name: :image_svc_metrics}
     ]
@@ -91,6 +101,12 @@ defmodule ImageSvc.Metrics do
       ),
       Telemetry.Metrics.last_value("vm.system_counts.port_count",
         description: "Number of ports"
+      ),
+
+      # CPU utilization (custom measurement)
+      Telemetry.Metrics.last_value("image_svc.cpu.utilization",
+        unit: :percent,
+        description: "Average CPU utilization percentage across all cores"
       )
     ]
   end
@@ -112,5 +128,50 @@ defmodule ImageSvc.Metrics do
       },
       %{status: status}
     )
+  end
+
+  @doc """
+  Measure CPU utilization and emit telemetry event.
+
+  Called periodically by telemetry_poller (every 5 seconds).
+  Uses :cpu_sup from :os_mon to get CPU utilization across all cores.
+  """
+  def measure_cpu_utilization do
+    try do
+      # Get CPU utilization: returns list of {CPU, Busy, NonBusy, Misc}
+      # or a single {all, Busy, NonBusy, Misc} tuple for overall utilization
+      case :cpu_sup.util() do
+        {:all, busy, _non_busy, _misc} ->
+          # Busy is already a percentage (0-100)
+          :telemetry.execute(
+            [:image_svc, :cpu],
+            %{utilization: busy},
+            %{}
+          )
+
+        cpu_list when is_list(cpu_list) ->
+          # Calculate average across all CPUs
+          total_busy =
+            Enum.reduce(cpu_list, 0, fn {_cpu, busy, _non_busy, _misc}, acc ->
+              acc + busy
+            end)
+
+          avg_busy = total_busy / length(cpu_list)
+
+          :telemetry.execute(
+            [:image_svc, :cpu],
+            %{utilization: avg_busy},
+            %{}
+          )
+
+        _other ->
+          # If cpu_sup is not available or returns unexpected format, do nothing
+          :ok
+      end
+    rescue
+      _ ->
+        # If :cpu_sup is not available, silently skip
+        :ok
+    end
   end
 end

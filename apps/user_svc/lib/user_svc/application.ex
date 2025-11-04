@@ -7,15 +7,16 @@ defmodule UserApp do
   """
   require Logger
 
+  defp image_bucket, do: Application.get_env(:user_svc, :image_bucket)
+  defp loki_chunks, do: Application.get_env(:user_svc, :loki_chunks)
+
   @impl true
   def start(_type, _args) do
     port = Application.get_env(:user_svc, :port, 8081)
     Logger.info("Starting USER Server on port #{port}")
+    ensure_minio_bucket()
 
     Logger.metadata(service: "user_svc")
-
-    # Ensure MinIO bucket exists
-    ensure_minio_bucket()
 
     children = [
       UserSvc.Metrics,
@@ -27,31 +28,31 @@ defmodule UserApp do
   end
 
   defp ensure_minio_bucket do
-    bucket = "msvc-images"
+    # buckets = ["msvc-images", "loki-chunks"]
+    buckets = [image_bucket(), loki_chunks()]
 
-    Logger.info("[MinIO] Ensuring bucket '#{bucket}' exists")
+    Logger.info("[MinIO] Ensuring bucket '#{image_bucket()}' exists")
 
-    case ExAws.S3.head_bucket(bucket) |> ExAws.request() do
-      {:ok, _} ->
-        Logger.info("[MinIO] Bucket '#{bucket}' already exists")
-        :ok
-
-      {:error, {:http_error, 404, _}} ->
-        Logger.info("[MinIO] Creating bucket '#{bucket}'")
-
-        case ExAws.S3.put_bucket(bucket, "us-east-1") |> ExAws.request() do
+    [:ok, :ok] =
+      for bucket <- buckets do
+        case ExAws.S3.head_bucket(bucket) |> ExAws.request() do
           {:ok, _} ->
-            Logger.info("[MinIO] Bucket '#{bucket}' created successfully")
+            Logger.info("[MinIO] Bucket '#{bucket}' already exists")
             :ok
 
-          {:error, reason} ->
-            Logger.error("[MinIO] Failed to create bucket: #{inspect(reason)}")
-            {:error, reason}
-        end
+          {:error, {:http_error, 404, _}} ->
+            Logger.info("[MinIO] Creating bucket '#{bucket}'")
 
-      {:error, reason} ->
-        Logger.error("[MinIO] Failed to check bucket: #{inspect(reason)}")
-        {:error, reason}
-    end
+            case ExAws.S3.put_bucket(bucket, "us-east-1") |> ExAws.request() do
+              {:ok, _} ->
+                Logger.info("[MinIO] Bucket '#{bucket}' created successfully")
+                :ok
+
+              {:error, reason} ->
+                Logger.error("[MinIO] Failed to create bucket: #{inspect(reason)}")
+                {:error, reason}
+            end
+        end
+      end
   end
 end

@@ -20,6 +20,7 @@ defmodule Clients.UserSvcClient do
   - `{:ok, response}` on success
   - `{:error, reason}` on failure
   """
+  @spec notify_email_sent(binary()) :: :ok | {:error, any()}
   def notify_email_sent(email_response_binary) do
     Logger.info("[UserSvcClient] Notifying user_svc of email delivery")
 
@@ -28,9 +29,11 @@ defmodule Clients.UserSvcClient do
 
   # Private HTTP helper
 
+  @spec post(binary(), binary(), binary()) :: {:ok, any()} | {:error, any()}
   defp post(base, path, body) do
     case Req.post(
-           Req.new(base_url: base),
+           Req.new(base_url: base)
+           |> OpentelemetryReq.attach(propagate_trace_headers: true),
            url: path,
            body: body,
            headers: [{"content-type", "application/protobuf"}],

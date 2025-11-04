@@ -51,6 +51,10 @@ defmodule ImageController do
   end
 
   defp enqueue_conversion_job(%Mcsv.ImageConversionRequest{} = job_args) do
+    # Inject OpenTelemetry trace context into job args
+    trace_headers = :otel_propagator_text_map.inject([])
+    trace_context = Map.new(trace_headers)
+
     # Build args map for Oban job (just metadata!)
     %{
       "user_id" => job_args.user_id,
@@ -62,7 +66,8 @@ defmodule ImageController do
       "pdf_quality" => job_args.pdf_quality || "high",
       "strip_metadata" => job_args.strip_metadata,
       "max_width" => job_args.max_width,
-      "max_height" => job_args.max_height
+      "max_height" => job_args.max_height,
+      "_otel_trace_context" => trace_context
     }
     |> JobService.Workers.ImageConversionWorker.new()
     |> Oban.insert()

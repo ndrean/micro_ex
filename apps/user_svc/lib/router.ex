@@ -9,6 +9,8 @@ defmodule UserRouter do
   plug(Plug.Logger, log: :info)
   # Telemetry for metrics
   plug(Plug.Telemetry, event_prefix: [:user_svc, :plug])
+  # Extract OpenTelemetry trace context from incoming requests
+  plug(UserSvc.OpenTelemetryPlug)
 
   plug(:match)
 

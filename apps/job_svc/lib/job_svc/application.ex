@@ -10,8 +10,10 @@ defmodule JobApp do
     port = Application.get_env(:job_svc, :port, 8082)
     Logger.info("Starting JOB SERVER on port #{port}")
 
+    # Enable OpenTelemetry instrumentation
     OpentelemetryEcto.setup([:job_svc, :ecto_repos])
-    OpentelemetryOban.setup(trace: [:jobs])
+
+    # OpentelemetryOban.setup(trace: [:jobs])  # Disabled: dependency conflict with opentelemetry_req
 
     children = [
       JobService.Repo,

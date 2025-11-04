@@ -33,6 +33,9 @@ defmodule JobService.Workers.ImageConversionWorker do
 
   @spec perform(Oban.Job.t()) :: :ok | {:error, any()}
   def perform(%Oban.Job{args: args}) do
+    # Extract and attach OpenTelemetry trace context from job args
+    attach_trace_context(args)
+
     Logger.info(
       "[ImageConversionWorker] Processing conversion for user #{args["user_id"]} (#{args["user_email"]})"
     )
@@ -47,4 +50,13 @@ defmodule JobService.Workers.ImageConversionWorker do
         {:error, reason}
     end
   end
+
+  # Extract OpenTelemetry trace context from job args and attach to current process
+  defp attach_trace_context(%{"_otel_trace_context" => trace_context}) when is_map(trace_context) do
+    # Convert map back to list of tuples for extraction
+    trace_headers = Enum.into(trace_context, [])
+    :otel_propagator_text_map.extract(trace_headers)
+  end
+
+  defp attach_trace_context(_args), do: :ok
 end

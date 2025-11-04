@@ -22,7 +22,9 @@ config :user_svc,
   client_svc_endpoints: %{
     pdf_ready: "/client_svc/PdfReady",
     receive_notification: "/client_svc/ReceiveNotification"
-  }
+  },
+  loki_chunks: System.get_env("LOKI_CHUNKS", "loki-chunks"),
+  image_bucket: System.get_env("IMAGE_BUCKET", "msvc-images")
 
 # MinIO / S3 Configuration
 config :ex_aws,

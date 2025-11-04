@@ -56,6 +56,7 @@ defmodule UserSvc.MixProject do
       {:opentelemetry_exporter, "~> 1.10"},
       {:opentelemetry, "~> 1.7"},
       {:opentelemetry_api, "~> 1.5"},
+      {:opentelemetry_req, "~> 1.0"},
       {:tls_certificate_check, "~> 1.29"},
 
       # Prometheus metrics

@@ -52,20 +52,16 @@ defmodule ImageSvc.UserSvcClient do
   # Private HTTP helpers
 
   defp post(base, path, body) do
-    try do
-      response =
-        Req.new(base_url: base)
-        |> Req.post!(
-          url: path,
-          body: body,
-          headers: [{"content-type", "application/protobuf"}],
-          receive_timeout: 30_000
-        )
-
-      {:ok, response}
-    rescue
-      error ->
-        {:error, error}
+    case Req.post(
+           Req.new(base_url: base)
+           |> OpentelemetryReq.attach(propagate_trace_headers: true),
+           url: path,
+           body: body,
+           headers: [{"content-type", "application/protobuf"}],
+           receive_timeout: 30_000
+         ) do
+      {:ok, response} -> {:ok, response}
+      {:error, reason} -> {:error, reason}
     end
   end
 end

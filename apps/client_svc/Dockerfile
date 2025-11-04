@@ -26,6 +26,7 @@ RUN mix deps.get --only prod
 
 # Copy application code
 COPY lib ./lib
+COPY priv ./priv
 COPY config/runtime.exs config/
 
 # Compile application

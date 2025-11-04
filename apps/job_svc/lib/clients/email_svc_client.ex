@@ -22,6 +22,7 @@ defmodule JobService.Clients.EmailSvcClient do
   - `:ok` on success
   - `{:error, reason}` on failure
   """
+  @spec send_email(map()) :: :ok | {:error, any()}
   def send_email(args) do
     request = %Mcsv.EmailRequest{
       user_id: args["id"],
@@ -54,6 +55,7 @@ defmodule JobService.Clients.EmailSvcClient do
 
   # Private helpers
 
+  @spec notify_email_delivery(binary()) :: :ok | {:error, any()}
   defp notify_email_delivery(response_body) do
     # Post back to job_svc's callback endpoint
     post(base_job_url(), job_svc_endpoints().notify_email_delivery, response_body)
@@ -70,11 +72,13 @@ defmodule JobService.Clients.EmailSvcClient do
     post(base_job_url(), job_svc_endpoints().notify_email_delivery, failure_response)
   end
 
+  @spec post(binary(), binary(), binary(), list()) :: {:ok, any()} | {:error, any()}
   defp post(base, path, body, opts \\ []) do
     receive_timeout = Keyword.get(opts, :receive_timeout, 30_000)
 
     case Req.post(
-           Req.new(base_url: base),
+           Req.new(base_url: base)
+           |> OpentelemetryReq.attach(propagate_trace_headers: true),
            url: path,
            body: body,
            headers: [{"content-type", "application/protobuf"}],

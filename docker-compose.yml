@@ -10,6 +10,14 @@ services:
     container_name: msvc-user-svc
     ports:
       - "8081:8081"
+
+    develop:
+      watch:
+        - action: rebuild
+          path: ./apps/user_svc/lib
+        - action: rebuild
+          path: ./apps/user_svc/mix.exs
+
     environment:
       # Application config
       PORT: "8081"
@@ -36,20 +44,9 @@ services:
       LOG_LEVEL: "info"
       # LOG_FORMAT: "json"  # Uncomment for JSON logs
 
-      # Docker Loki logging driver - no sidecar needed!
-    logging:
-      driver: loki
-      options:
-        loki-url: "http://localhost:3100/loki/api/v1/push"
-        loki-batch-size: "400"
-        loki-retries: "3"
-        labels: "service,environment"
-        loki-external-labels: "service=user_svc,environment=dev"
-
     depends_on:
       - minio
       - jaeger
-      - loki
     healthcheck:
       test: [ "CMD", "wget", "-q", "--spider", "http://localhost:8081/health" ]
       interval: 30s
@@ -57,51 +54,59 @@ services:
       retries: 3
 
   # Client Service
-  # client_svc:
-  #   build:
-  #     context: ./apps/client_svc
-  #     dockerfile: Dockerfile
-  #     args:
-  #       ELIXIR_IMAGE: hexpm/elixir:1.19.2-erlang-28.1-alpine-3.22.2
+  client_svc:
+    build:
+      context: ./apps/client_svc
+      dockerfile: Dockerfile
+      args:
+        ELIXIR_IMAGE: hexpm/elixir:1.19.2-erlang-28.1-alpine-3.22.2
 
-  #   container_name: msvc-client-svc
-  #   ports:
-  #     - "4000:4000"
-  #   environment:
-  #     # Application config
-  #     PORT: "4000"
-  #     MIX_ENV: "prod"
+    container_name: msvc-client-svc
+    ports:
+      - "4000:4000"
 
-  #     # Service URLs (use Docker service names)
-  #     USER_SVC_URL: "http://user_svc:8081"
+    develop:
+      watch:
+        - action: rebuild
+          path: ./apps/client_svc/lib
+        - action: rebuild
+          path: ./apps/client_svc/mix.exs
 
-  #     # OpenTelemetry config
-  #     OTEL_SERVICE_NAME: "client_svc"
-  #     OTEL_EXPORTER_OTLP_ENDPOINT: "http://jaeger:4318"
+    environment:
+      # Application config
+      PORT: "4000"
+      MIX_ENV: "prod"
 
-  #     # Logging config
-  #     LOG_LEVEL: "info"
-  #     # LOG_FORMAT: "json"  # Uncomment for JSON logs
+      # Service URLs (use Docker service names)
+      USER_SVC_URL: "http://user_svc:8081"
 
-  #   # Docker Loki logging driver
-  #   logging:
-  #     driver: loki
-  #     options:
-  #       loki-url: "http://localhost:3100/loki/api/v1/push"
-  #       loki-batch-size: "400"
-  #       loki-retries: "3"
-  #       labels: "service,environment"
-  #       loki-external-labels: "service=client_svc,environment=dev"
+      # OpenTelemetry config
+      OTEL_SERVICE_NAME: "client_svc"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://jaeger:4318"
 
-  #   depends_on:
-  #     - user_svc
-  #     - jaeger
-  #     - loki
-  #   healthcheck:
-  #     test: [ "CMD", "wget", "-q", "--spider", "http://localhost:4000/health" ]
-  #     interval: 30s
-  #     timeout: 3s
-  #     retries: 3
+      # Logging config
+      LOG_LEVEL: "info"
+      # LOG_FORMAT: "json"  # Uncomment for JSON logs
+
+    # Docker Loki logging driver (commented - using Promtail instead)
+    # logging:
+    #   driver: loki
+    #   options:
+    #     loki-url: "http://localhost:3100/loki/api/v1/push"
+    #     loki-batch-size: "400"
+    #     loki-retries: "3"
+    #     labels: "service,environment"
+    #     loki-external-labels: "service=client_svc,environment=dev"
+
+    depends_on:
+      - user_svc
+      - jaeger
+      - loki
+    healthcheck:
+      test: [ "CMD", "wget", "-q", "--spider", "http://localhost:4000/health" ]
+      interval: 30s
+      timeout: 3s
+      retries: 3
 
   # Job Service
   job_svc:
@@ -114,6 +119,14 @@ services:
     container_name: msvc-job-svc
     ports:
       - "8082:8082"
+
+    develop:
+      watch:
+        - action: rebuild
+          path: ./apps/job_svc/lib
+        - action: rebuild
+          path: ./apps/job_svc/mix.exs
+
     environment:
       # Application config
       PORT: "8082"
@@ -123,6 +136,8 @@ services:
       IMAGE_SVC_URL: "http://image_svc:8084"
       EMAIL_SVC_URL: "http://email_svc:8083"
       USER_SVC_URL: "http://user_svc:8081"
+      IMAGE_SVC: "msvc-images"
+      IMAGE_BUCKET_MAX_AGE: 3600
 
       # OpenTelemetry config
       OTEL_SERVICE_NAME: "job_svc"
@@ -136,22 +151,20 @@ services:
       DATABASE_PATH: "/app/db/job_service.db"
       DB_POOL_SIZE: "5"
 
-    # Docker Loki logging driver
-    logging:
-      driver: loki
-      options:
-        loki-url: "http://localhost:3100/loki/api/v1/push"
-        loki-batch-size: "400"
-        loki-retries: "3"
-        labels: "service,environment"
-        loki-external-labels: "service=job_svc,environment=dev"
+      # MinIO config (for cleanup worker)
+      MINIO_ACCESS_KEY: "minioadmin"
+      MINIO_SECRET_KEY: "minioadmin"
+      MINIO_SCHEME: "http://"
+      MINIO_HOST: "minio"
+      MINIO_PORT: "9000"
+      AWS_REGION: "us-east-1"
 
     volumes:
-      - job-data:/app/db  # Persist SQLite database
+      - job-data:/app/db # Persist SQLite database
 
     depends_on:
+      - minio
       - jaeger
-      - loki
     healthcheck:
       test: [ "CMD", "wget", "-q", "--spider", "http://localhost:8082/health" ]
       interval: 30s
@@ -169,6 +182,14 @@ services:
     container_name: msvc-image-svc
     ports:
       - "8084:8084"
+
+    develop:
+      watch:
+        - action: rebuild
+          path: ./apps/image_svc/lib
+        - action: rebuild
+          path: ./apps/image_svc/mix.exs
+
     environment:
       # Application config
       PORT: "8084"
@@ -193,20 +214,9 @@ services:
       LOG_LEVEL: "info"
       # LOG_FORMAT: "json"  # Uncomment for JSON logs
 
-      # Docker Loki logging driver
-    logging:
-      driver: loki
-      options:
-        loki-url: "http://localhost:3100/loki/api/v1/push"
-        loki-batch-size: "400"
-        loki-retries: "3"
-        labels: "service,environment"
-        loki-external-labels: "service=image_svc,environment=dev"
-
     depends_on:
       - minio
       - jaeger
-      - loki
     healthcheck:
       test: [ "CMD", "wget", "-q", "--spider", "http://localhost:8084/health" ]
       interval: 30s
@@ -224,6 +234,14 @@ services:
     container_name: msvc-email-svc
     ports:
       - "8083:8083"
+
+    develop:
+      watch:
+        - action: rebuild
+          path: ./apps/email_svc/lib
+        - action: rebuild
+          path: ./apps/email_svc/mix.exs
+
     environment:
       # Application config
       PORT: "8083"
@@ -240,19 +258,8 @@ services:
       # Mailer config (Local adapter - no SMTP needed!)
       MAILER_ADAPTER: "local"
 
-    # Docker Loki logging driver
-    logging:
-      driver: loki
-      options:
-        loki-url: "http://localhost:3100/loki/api/v1/push"
-        loki-batch-size: "400"
-        loki-retries: "3"
-        labels: "service,environment"
-        loki-external-labels: "service=email_svc,environment=dev"
-
     depends_on:
       - jaeger
-      - loki
     healthcheck:
       test: [ "CMD", "wget", "-q", "--spider", "http://localhost:8083/health" ]
       interval: 30s
@@ -277,6 +284,19 @@ services:
       timeout: 20s
       retries: 3
 
+  # MinIO initialization - creates required buckets
+  minio-init:
+    image: minio/mc:latest
+    container_name: msvc-minio-init
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c " mc alias set local http://minio:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD}; mc mb --ignore-existing local/msvc-images; mc mb --ignore-existing local/loki-chunks; echo 'MinIO buckets initialized successfully'; "
+
   # zipkin:
   #   image: openzipkin/zipkin-slim
   #   container_name: msvc-zipkin
@@ -300,6 +320,32 @@ services:
       timeout: 10s
       retries: 3
 
+  # Prometheus - Metrics collection and storage
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: msvc-prometheus
+    ports:
+      - "9090:9090" # Prometheus UI and API
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    depends_on:
+      - user_svc
+      - client_svc
+      - job_svc
+      - image_svc
+      - email_svc
+    healthcheck:
+      test: [ "CMD", "wget", "--spider", "-q", "http://localhost:9090/-/healthy" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
   # Loki - Log aggregation (like Prometheus but for logs)
   loki:
     image: grafana/loki:latest
@@ -311,25 +357,26 @@ services:
       - ./loki/config.yml:/etc/loki/config.yml # Mount custom config with MinIO
       - loki-data:/loki
     depends_on:
-      - minio # Loki stores data in MinIO
+      - minio-init # Wait for MinIO buckets to be initialized
     healthcheck:
       test: [ "CMD", "wget", "--spider", "-q", "http://localhost:3100/ready" ]
       interval: 30s
       timeout: 10s
       retries: 3
 
-  # Promtail - Log shipper (reads logs and sends to Loki)
-  # promtail:
-  #   image: grafana/promtail:latest
-  #   container_name: msvc-promtail
-  #   ports:
-  #     - "9080:9080" # Promtail HTTP
-  #   volumes:
-  #     - ./promtail/config.yml:/etc/promtail/config.yml
-  #     - ./logs:/var/log/elixir # Mount logs directory
-  #   command: -config.file=/etc/promtail/config.yml
-  #   depends_on:
-  #     - loki
+  # Promtail - Log shipper (reads Docker logs and sends to Loki)
+  promtail:
+    image: grafana/promtail:latest
+    container_name: msvc-promtail
+    ports:
+      - "9080:9080" # Promtail HTTP
+    volumes:
+      - ./promtail/config.yml:/etc/promtail/config.yml
+      - /var/run/docker.sock:/var/run/docker.sock:ro # Read Docker container logs
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
+    restart: unless-stopped
 
   # Grafana - Visualization for logs AND metrics
   grafana:
@@ -347,6 +394,7 @@ services:
     depends_on:
       - loki
       - jaeger
+      - prometheus
     healthcheck:
       test: [ "CMD", "wget", "--spider", "-q", "http://localhost:3000/api/health" ]
       interval: 30s
@@ -361,4 +409,6 @@ volumes:
   grafana-data:
     driver: local
   job-data:
+    driver: local
+  prometheus-data:
     driver: local

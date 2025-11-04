@@ -18,7 +18,12 @@ config :job_svc, Oban,
   queues: [
     default: 10,
     emails: 10,
-    images: 10
+    images: 10,
+    cleanup: 5
+  ],
+  crontab: [
+    # Cleanup old images every 15 minutes (files older than 1 hour)
+    {"*/15 * * * *", StorageCleanupWorker}
   ]
 
 # OpenTelemetry Ecto instrumentation

@@ -73,7 +73,8 @@ defmodule Clients.JobSvcClient do
     receive_timeout = Keyword.get(opts, :receive_timeout, 30_000)
 
     case Req.post(
-           Req.new(base_url: base),
+           Req.new(base_url: base)
+           |> OpentelemetryReq.attach(propagate_trace_headers: true),
            url: path,
            body: body,
            headers: [{"content-type", "application/protobuf"}],
