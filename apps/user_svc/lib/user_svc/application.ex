@@ -20,7 +20,7 @@ defmodule UserApp do
 
     children = [
       UserSvc.Metrics,
-      {Bandit, plug: UserRouter, port: 8081}
+      {Bandit, plug: UserRouter, port: port}
     ]
 
     opts = [strategy: :one_for_one, name: UserSvc.Supervisor]

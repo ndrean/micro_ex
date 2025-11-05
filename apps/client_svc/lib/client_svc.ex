@@ -12,7 +12,7 @@ defmodule Client do
   # Just reference the module directly: Mcsv.UserRequest
 
   # Runtime config - reads from runtime.exs via environment variables
-  defp base_user_url, do: Application.get_env(:client_svc, :user_svc_base_url)
+  defp base_user_url, do: Application.get_env(:client_svc, :user_svc_base_url) |> dbg()
   defp user_endpoints, do: Application.get_env(:client_svc, :user_endpoints)
 
   @doc """

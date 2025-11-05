@@ -10,7 +10,7 @@ defmodule ImageController do
   """
   @spec convert(Plug.Conn.t()) :: Plug.Conn.t()
   def convert(conn) do
-    {:ok, binary_body, conn} = Plug.Conn.read_body(conn)
+    {:ok, binary_body, new_conn} = Plug.Conn.read_body(conn)
 
     # Enqueue Oban job
     binary_body
@@ -29,7 +29,7 @@ defmodule ImageController do
           }
           |> Mcsv.UserResponse.encode()
 
-        conn
+        new_conn
         |> put_resp_content_type("application/protobuf")
         |> send_resp(200, response_binary)
 

@@ -18,6 +18,8 @@ defmodule ImageSvc.Application do
     Logger.info("Starting IMAGE SERVICE on port #{port}")
 
     children = [
+      # PromEx metrics
+      ImageSvc.PromEx,
       # Prometheus metrics exporter (port 9568)
       ImageSvc.Metrics,
       # HTTP server (port 8084)

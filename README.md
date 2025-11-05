@@ -12,21 +12,40 @@ This is a demo of an **Plug/Elixir-based microservices architecture** demonstrat
 - **MinIO** for S3 compatible local-cloud storage
 - **OpenTelemetry** with **Jaeger** for traces
 - **Promtail** with **Loki** linked to MinIO for logs
--  **Prometheus** for metrics
+- **Prometheus** for metrics
+- **Grafana** for global dashboards
 
-We run 5 Elixir apps as microservices communicating via **Protobuf serialization over HTTP/1**, providing strong type safety and a contract-first approach.
+We run 5 Elixir apps as microservices communicating via **Protobuf serialization over HTTP/1**.
+This provides strong type safety and a contract-first approach.
 
 Routes follow a **Twirp-like RPC DSL** (`/service_name/MethodName`) instead of traditional REST (`/resource/`)
 
 ## Observability Stack
 
-| System	| Purpose	| Data Type	| Retention |
+Firtly a quote:
+
+> "Logs, metrics, and traces are often known as the three pillars of observability. While plainly having access to logs, metrics, and traces doesn’t necessarily make systems more observable, these are powerful tools that, if understood well, can unlock the ability to build better systems."
+
+| System | Purpose | Data Type | Retention |
 | --     | --        | --        | --        |
 | Prometheus | Metrics | Numbers (counters, gauges)| Days/Weeks |
 | Loki| Logs| Text events| Days/Weeks |
 | Jaeger |Traces| Request flows | Hours/Days |
 
+Pormetheus via `:promex`. We named "prometheus" the datasource name in the onfiguration file _prometheus.yml_  under the key `:uid`.
 
+```sh
+mix prom_ex.gen.config --datasource prometheus
+
+mix prom_ex.dashboard.export --dashboard application.json --module UserSvc.PromEx --file_path ../../grafana/dashboards/user_svc_application.json
+
+for service in job_svc image_svc email_svc client_svc; do
+  cd apps/$service
+  mix prom_ex.dashboard.export --dashboard application.json --module "$(echo $service | sed 's/_\([a-z]\)/\U\1/g' | sed 's/^./\U&/').PromEx" --stdout > ../../grafana/dashboards/${service}_application.json
+  mix prom_ex.dashboard.export --dashboard beam.json --module "$(echo $service | sed 's/_\([a-z]\)/\U\1/g' | sed 's/^./\U&/').PromEx" --stdout > ../../grafana/dashboards/${service}_beam.json
+  cd ../..
+done
+```
 
 - METRICS: `Prometheus`
   "How much CPU/memory/time?
@@ -49,7 +68,6 @@ Routes follow a **Twirp-like RPC DSL** (`/service_name/MethodName`) instead of t
   "Where did this request fail?"
   "What's the call graph?"
 
-
 > We used RPC-style endpoints (not RESTful API with dynamic segments) which makes observability easy (no `:id` in static paths).
 
 |   System    |   Model     |   Format    |    Storage      |
@@ -60,10 +78,15 @@ Routes follow a **Twirp-like RPC DSL** (`/service_name/MethodName`) instead of t
 | Jaeger      | PUSH OTLP        | Protobuf (spans)   │|Memory only! Lost on restart   |
 | Grafana     | N/A (UI)     | N/A         | SQLite   (dashboards only)       |
 
-
 Tracing: headers are injected to follow the trace
 
+## Misc tips & tricks
 
+- protobuf: set `pass: ["application/protobuf"]` in the Plug.Parsers in the module _router.ex_ .
+- follow trace async/Oban worker: add "_otel_trace_context" to your Oban job args
+- PromEx datasource: use the value in datasource.name (and uid) for /grafana/provisioning/datasources/datasources.yml, and in /prom_ex.ex/ dashboard_assigns()[:datasource]
+- generate the standard Promex dshboards.
+- respect Grafana folder structure: _grafana/provisioning/{datasources,dashboards,plugins,notifiers}_.
 
 ### Services
 
@@ -90,6 +113,7 @@ title: Services
         MinIO -->|:9001| Browser
         MSOT -->|:4318| Jaeger
 ```
+
 </details>
 
 ### Logs pipeline
@@ -132,6 +156,7 @@ flowchart TB
 
     Grafana[GRAFANA<br> GET:3100 <br>/loki/api/v1/query_range] -->|GET| L
 ```
+
 </details>
 
 ### Trace pipeline
@@ -173,8 +198,8 @@ flowchart TD
     UI-->|:3000| G
     UI-->|:16686|J
 ```
-</details>
 
+</details>
 
 If you run  locally with Docker, you can use the Docker daemon and use a `loki` driver to read and push the logs from stdout (in the docker socket) to Loki. We used instead `Promtail` to consume the logs and push them to Loki. This solution is more K8 ready.
 
@@ -184,9 +209,7 @@ If you run  locally with Docker, you can use the Docker daemon and use a `loki` 
 docker plugin install grafana/loki-docker-driver:latest --alias loki --grant-all-permissions
 ```
 
-
 ## Prerequisites
-
 
 Before running this project, ensure you have the following installed on your system:
 
@@ -224,7 +247,7 @@ Before running this project, ensure you have the following installed on your sys
 
 ### Quick Setup
 
-```bash
+```sh
 # 1. Start MinIO (S3-compatible storage)
 ./setup_minio.sh
 
@@ -244,6 +267,111 @@ done
 ```
 
 See [MINIO_SETUP.md](MINIO_SETUP.md) for detailed MinIO configuration and troubleshooting.
+
+## API Documentation
+
+### OpenAPI Specifications
+
+All services provide OpenAPI 3.0 specifications for their HTTP endpoints. While the services communicate internally via **Protobuf binary serialization** (`application/x-protobuf`), the OpenAPI specs document the HTTP interface and contract.
+
+**Available Specifications**:
+
+- 📘 **[user_svc.yaml](openapi/user_svc.yaml)** - User orchestration service (port 8081)
+- 📗 **[job_svc.yaml](openapi/job_svc.yaml)** - Oban job queue service (port 8082)  
+- 📙 **[email_svc.yaml](openapi/email_svc.yaml)** - Email delivery service (port 8083)
+- 📕 **[image_svc.yaml](openapi/image_svc.yaml)** - Image processing service (port 8084)
+
+> **Note**: Only `image_svc` currently implements **OpenApiSpex** runtime spec generation. Other services have manually maintained YAML specs. See [Future Work](#future-work) for plans to unify.
+
+### Viewing Documentation
+
+**Quick Access** (when running Docker Compose):
+
+```bash
+# Start all services
+docker compose up -d
+
+# Access the documentation hub
+open http://localhost:8080   # Or visit openapi/index.html
+```
+
+**Interactive Documentation**:
+
+| Tool | URL | Best For |
+|------|-----|----------|
+| 🎨 **Redoc** | http://localhost:8080 | Beautiful reading experience, onboarding |
+| 🧪 **Swagger UI** | http://localhost:8085 | Interactive API testing ("Try it out" button) |
+| 📄 **Landing Page** | [openapi/index.html](openapi/index.html) | Quick links to all services & observability |
+
+**Swagger UI Service Selector**:
+
+```txt
+http://localhost:8085
+├── User Service (8081)    ← Dropdown selector
+├── Job Service (8082)
+├── Email Service (8083)
+└── Image Service (8084)
+```
+
+**Redoc Direct Links** (specify YAML via query param):
+
+```txt
+http://localhost:8080?url=specs/user_svc.yaml
+http://localhost:8080?url=specs/job_svc.yaml
+http://localhost:8080?url=specs/email_svc.yaml
+http://localhost:8080?url=specs/image_svc.yaml
+```
+
+### OpenApiSpex Implementation Status
+
+| Service | OpenApiSpex Runtime | Manual YAML | Notes |
+|---------|:------------------:|:-----------:|-------|
+| image_svc | ✅ Yes | ✅ Yes | Full runtime spec + schemas |
+| user_svc | ❌ No | ✅ Yes | Dependency installed, not implemented |
+| job_svc | ❌ No | ✅ Yes | Dependency installed, not implemented |
+| email_svc | ❌ No | ✅ Yes | Dependency installed, not implemented |
+| client_svc | ❌ No | ❌ No | Test client only, no spec needed |
+
+**image_svc Implementation** (reference example):
+
+```elixir
+# lib/api_spec.ex - OpenAPI spec definition
+defmodule ImageSvc.ApiSpec do
+  alias OpenApiSpex.{Info, OpenApi, Server}
+  
+  def spec do
+    %OpenApi{
+      info: %Info{
+        title: "Image Service API",
+        version: "1.0.0"
+      },
+      servers: [%Server{url: "http://localhost:8084"}],
+      paths: Paths.from_router(ImageSvc.Router)
+    }
+  end
+end
+
+# lib/router.ex - Serve spec at /openapi
+plug(OpenApiSpex.Plug.PutApiSpec, module: ImageSvc.ApiSpec)
+
+get "/openapi" do
+  conn
+  |> put_resp_content_type("application/json")
+  |> send_resp(200, Jason.encode!(ImageSvc.ApiSpec.spec()))
+end
+
+# lib/conversion_controller.ex - Document endpoint
+use OpenApiSpex.ControllerSpecs
+
+operation :convert,
+  summary: "Convert image to PDF",
+  request_body: {"Image conversion request", "application/x-protobuf", ImageConversionRequestSchema},
+  responses: [
+    ok: {"Conversion successful", "application/x-protobuf", ImageConversionResponseSchema}
+  ]
+```
+
+See [openapi/README.md](openapi/README.md) for detailed documentation setup and usage.
 
 ## Architecture Overview
 
@@ -288,7 +416,6 @@ architecture-beta
 ```
 
 </details>
-
 
 ### Services
 
@@ -348,7 +475,6 @@ architecture-beta
 - **Endpoints**: `/image_svc/ConvertImage`
 
 ## Technology Stack
-
 
 ### Protobuf
 
@@ -594,7 +720,6 @@ This workflow demonstrates efficient binary data handling using the "Pull Model"
 - **Pull Model & Presigned URLs**: Image service fetches data on-demand via temporary URLs (using AWS S3 pattern)
 - **Concurrent Flow**: `Task.async_stream` for parallel client requests and Oban for true async background jobs; workers poll the database independently, fully decoupled from the request flow with automatic retry logic.
 
-
 **Problem**: We cannot pass the image binary through the chain as each step would copy the image, causing memory pressure.
 
 **Solution**: The image service pulls data when needed via a presigned URL.
@@ -648,7 +773,6 @@ This workflow demonstrates efficient binary data handling using the "Pull Model"
 - ❌ user_svc → job_svc: NO binary (only URL)
 - ❌ job_svc → image_svc: NO binary (only URL)
 
-
 1. client_svc (local) → user_svc (Docker)
    POST /user_svc/CreateUser ✅ 200 in 25ms
 
@@ -680,7 +804,7 @@ This workflow demonstrates efficient binary data handling using the "Pull Model"
 
 3. user_svc → job_svc
    POST /job_svc/ConvertImage ✅ 200 in 15ms
-   
+
 4. Oban Worker (SQLite database we fixed!)
    [ImageConversionWorker] Processing conversion job 5 ✅
 
@@ -701,7 +825,6 @@ This workflow demonstrates efficient binary data handling using the "Pull Model"
 
 10. user_svc → client_svc
     ⚠️ :nxdomain (EXPECTED - client_svc is local, not in Docker)
-
 
 ## Docker setup
 
@@ -731,26 +854,421 @@ docker exec -it msvc-client-svc bin/client_svc remote
 # iex(client_svc@ba41c71bacac)1>
 ```
 
-## COCOMO
+## Testing
 
-Install and run [scc](https://github.com/boyter/scc), a code counter with complexity calculations and COCOMO estimates.
-Note that it excludes files from .gitignore (deps, node_modules...).
+Connect to the "msvc-client-svc" container and get an IEX session to run commands:
+
+```sh
+docker exec -it msvc-client-svc bin/client_svc remote
+
+iex(client_svc@b6d94600b7e3)4> 
+   Enum.to_list(1..20) 
+   |> Task.async_stream(fn i -> Client.create(i) end, max_concurrency: 10, ordered: false) 
+   |> Stream.run
+
+# :ok
+```
+
+## COCOMO Complexity Analysis of this project
+
+Tool: <https://github.com/boyter/scc>
 
 ───────────────────────────────────────────────────────────────────────────────
-Language                 Files     Lines   Blanks  Comments     Code Complexity
+Language            Files       Lines    Blanks  Comments       Code Complexity
 ───────────────────────────────────────────────────────────────────────────────
-Elixir                      93      6113     1098       819     4196        365
-Markdown                     8       923      231         0      692          0
-YAML                         7      1025       70        98      857          0
-Dockerfile                   5       344       86        92      166         16
-Protocol Buffers             5       310       50        86      174          0
-Docker ignore                2        63       15        18       30          0
-Shell                        1        28        4         3       21          2
+Elixir                103       7,097     1,066       901      5,130        267
+JSON                   10      14,875         7         0     14,868          0
+YAML                   10       1,386       104        78      1,204          0
+Markdown                8       1,177       302         0        875          0
+Docker ignore           5         204        47        54        103          0
+Dockerfile              5         345        86        92        167         16
+Protocol Buffe…         5         310        50        86        174          0
+Shell                   3         128        23        17         88          3
+HTML                    1         412        33         0        379          0
 ───────────────────────────────────────────────────────────────────────────────
-Total                      121      8806     1554      1116     6136        383
+Total                 150      25,934     1,718     1,228     22,988        286
 ───────────────────────────────────────────────────────────────────────────────
-Estimated Cost to Develop (organic) $181,499
-Estimated Schedule Effort (organic) 7.19 months
-Estimated People Required (organic) 2.24
+Estimated Cost to Develop (organic) $726,392
+Estimated Schedule Effort (organic) 12.18 months
+Estimated People Required (organic) 5.30
+───────────────────────────────────────────────────────────────────────────────
+Processed 683366 bytes, 0.683 megabytes (SI)
 ───────────────────────────────────────────────────────────────────────────────
 
+## Production Considerations
+
+### Observability Stack Overhead
+
+**Development vs Production Balance**:
+
+> ⚠️ *"You have more containers for observability than real services running!"*
+
+This is intentional for the demo and typical for microservices in development:
+
+| Environment | Services | Observability | Ratio |
+|-------------|----------|---------------|-------|
+| **This Demo** | 5 apps | 6 containers (Grafana, Prometheus, Loki, Jaeger, Promtail, MinIO) | 1:1.2 |
+| **Production** | 50+ apps | Same 6 containers | 1:0.12 |
+
+**Why This Makes Sense**:
+
+1. **Observability scales horizontally, not per-service**:
+   - 1 Prometheus scrapes 5 or 500 services equally well
+   - 1 Loki aggregates logs from 5 or 5000 pods
+   - 1 Jaeger traces 5 or 50 microservices
+
+2. **Development parity** (The 12-Factor App):
+   - Learn observability patterns early
+   - Test dashboards/alerts before production
+   - Debug with production-like tools
+
+3. **Cost in production**:
+
+```txt
+5 Elixir apps × 512MB = 2.5GB
+Observability stack    = 2GB (Prometheus/Loki data stores)
+Total                  = 4.5GB
+
+50 Elixir apps × 512MB = 25GB
+Observability stack    = 3GB (same containers, more data)
+Total                  = 28GB (~10% overhead)
+```
+
+**Production Optimization**:
+
+**Production Optimization**:
+- Use managed services (Datadog, New Relic, Grafana Cloud) to eliminate self-hosting
+- Sidecar pattern (Promtail as DaemonSet in K8s) reduces per-pod overhead
+- **Sampling strategies** for traces (10% of traffic vs 100% in dev)
+- **Protocol optimization**:
+  - **Current**: OTLP/HTTP (port 4318) - Easy to debug, reliable
+  - **Production**: Switch to OTLP/gRPC (port 4317) - 2-5x faster, HTTP/2 multiplexing
+  - **Metrics**: Consider StatsD/UDP (fire-and-forget, non-blocking) for high-volume metrics
+  - **Why not UDP for traces?** Traces are critical for debugging; losing spans = incomplete request flows
+  - **How to switch to gRPC**:
+    ```bash
+    # Option 1: Environment variables (recommended)
+    OTEL_EXPORTER_OTLP_PROTOCOL=grpc
+    OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
+    
+    # Option 2: .env file (copy from .env.example)
+    echo "OTEL_PROTOCOL=grpc" >> .env
+    echo "OTEL_ENDPOINT=http://jaeger:4317" >> .env
+    docker compose up --build
+    ```
+  - **Note**: Requires `otlp_protocol` config update (already implemented in `user_svc`, replicate for other services)
+
+### Container Count Breakdown
+
+**Application Containers** (5):
+
+- client_svc, user_svc, job_svc, email_svc, image_svc
+
+**Infrastructure** (1):
+
+- MinIO (S3-compatible storage)
+
+**Observability** (6):
+
+- Prometheus (metrics scraper + TSDB)
+- Loki (log aggregator)
+- Promtail (log shipper - would be K8s DaemonSet in prod)
+- Jaeger (trace collector)
+- Grafana (visualization UI)
+- Swagger UI / Redoc (API documentation viewers)
+
+**Total**: 12 containers (in production, observability would serve 100s of services)
+
+---
+
+## Future Work
+
+### TODO API Documentation
+
+- [ ] **Implement OpenApiSpex for all services**:
+  - ✅ `image_svc` - Fully implemented with runtime spec generation
+  - ⏳ `user_svc` - Dependency installed, add `ApiSpec` module + schemas
+  - ⏳ `job_svc` - Dependency installed, add `ApiSpec` module + schemas  
+  - ⏳ `email_svc` - Dependency installed, add `ApiSpec` module + schemas
+  - ❌ `client_svc` - Not needed (test client only)
+
+- [ ] **Auto-generate OpenAPI YAML from specs**:
+  
+```elixir
+# Add to each service router
+get "/openapi.yaml" do
+   spec = MyService.ApiSpec.spec()
+   yaml = OpenApiSpex.OpenApi.to_yaml(spec)
+   send_resp(conn, 200, yaml)
+end
+```
+
+- [ ] **Replace manual YAML with runtime-generated specs**:
+  - Fetch from `/openapi.yaml` endpoint instead of static files
+  - Single source of truth (code = documentation)
+
+### Observability Enhancements
+
+- [ ] **Add custom PromEx plugins** for business metrics:
+  - Image conversion success rate
+  - Email delivery latency
+  - Job queue depth by worker type
+
+- [ ] **Alerting rules**:
+  - Prometheus AlertManager for threshold-based alerts
+  - Integrate with PagerDuty/Slack
+
+- [ ] **Log sampling** for production:
+  - Sample 10% of successful requests
+  - Keep 100% of errors/warnings
+
+### Architecture Improvements
+
+- [ ] **12-Factor App compliance** (Config in environment):
+  - ✅ **Phase 1 Complete**: OTLP protocol configurable via `OTEL_PROTOCOL` env var
+  - ✅ Created `.env.example` template for all configuration
+  - ⏳ **Phase 2**: Refactor Dockerfiles to use `ARG PORT` instead of hardcoded `EXPOSE`
+  - ⏳ **Phase 3**: Update `docker-compose.yml` to use env vars for all ports
+  - 🎯 **Goal**: Single source of truth in `.env` file
+  - 📖 **See**: [docs/12_FACTOR_REFACTORING.md](docs/12_FACTOR_REFACTORING.md) for implementation plan
+
+- [ ] **Complete OTLP protocol configuration** for all services:
+  - ✅ `user_svc` - Runtime protocol selection implemented
+  - ⏳ `job_svc`, `image_svc`, `email_svc`, `client_svc` - Copy pattern from user_svc
+  - Test gRPC vs HTTP performance (benchmark with K6)
+
+- [ ] **Service mesh** (Istio/Linkerd):
+
+- [ ] **Service mesh** (Istio/Linkerd):
+  - Automatic mTLS between services
+  - Circuit breaking and retries
+  - Traffic splitting for canary deployments
+
+- [ ] **gRPC migration** (for high-throughput scenarios):
+  - Keep Protobuf messages (already defined!)
+  - Replace HTTP/1 with HTTP/2 + gRPC
+  - Benchmarks needed: gRPC overhead vs HTTP/1 simplicity
+
+- [ ] **Event sourcing** for job_svc:
+  - Replace Oban state transitions with event log
+  - Better audit trail and replay capability
+  - See explanation below ⬇️
+
+### Testing
+
+> **The Testing Pyramid**: Not just logs/metrics/traces - documentation and tests are often called the "4th and 5th pillars" of observable systems.
+
+**Testing Levels** (in order of execution frequency):
+
+1. **Static Analysis** (100% - every file save):
+   - ✅ **Credo** (already configured) - Elixir linting
+   - ✅ **Dialyzer** - Type checking
+   - 📝 **ExDoc** - Documentation coverage
+   - 🔒 **Sobelow** - Security analysis for Phoenix/Plug apps
+
+2. **Unit Tests** (70% of test suite):
+   - Test individual functions in isolation
+   - Fast (<1ms per test), no external dependencies
+   - Example: Test `ImageSvc.convert_to_pdf/2` with mock files
+
+3. **Integration Tests** (20% of test suite):
+   - Test multiple modules working together
+   - May use real database (SQLite in your case)
+   - Example: Test Oban job enqueuing → worker execution → email delivery
+
+4. **Contract Tests** (Service boundaries):
+   - ⚠️ **Critical for microservices!**
+   - Verify Protobuf message compatibility between services
+   - Tools: **Pact** (consumer-driven contracts)
+   - Example: `user_svc` expects `job_svc` to accept `EmailRequest` with fields `user_id`, `user_email`
+
+5. **End-to-End (E2E) Tests** (5% of test suite):
+   - Full workflow across all services
+   - Slow, brittle, but catches integration bugs
+   - Example: Upload PNG → verify PDF in MinIO → check email sent
+
+6. **Load/Performance Tests** (On-demand):
+   - Tools: **K6**, **Locust**, **wrk**
+   - Measure throughput, latency percentiles (p50, p95, p99)
+   - Example: Can the system handle 1000 concurrent image conversions?
+
+7. **Chaos Engineering** (Production-like environments):
+   - **What it is**: Deliberately inject failures to verify resilience
+   - **Tools**: Chaos Mesh, Gremlin, Toxiproxy
+   - **Examples**:
+     - Kill random containers (test retry logic)
+     - Inject network latency (test timeouts)
+     - Fill disk to 100% (test error handling)
+     - Corrupt Protobuf messages (test validation)
+   - **Goal**: Discover weaknesses before they cause outages
+
+**Current State**:
+
+| Test Type | Status | Priority |
+|-----------|--------|----------|
+| Unit Tests | ⚠️ Minimal | **High** - Add tests for controllers, workers |
+| Integration Tests | ❌ Missing | **High** - Test Oban job workflows |
+| Contract Tests | ❌ Missing | **Medium** - Protobuf schemas are contracts |
+| E2E Tests | ❌ Missing | **Low** - Manual testing via IEx currently |
+| Load Tests | ❌ Missing | **Medium** - Benchmark image conversion |
+| Chaos Tests | ❌ Missing | **Low** - Only needed for production prep |
+
+**Recommended Additions**:
+
+- [ ] **ExUnit setup**:
+  ```elixir
+  # test/user_svc/user_controller_test.exs
+  defmodule UserSvc.UserControllerTest do
+    use ExUnit.Case, async: true
+    
+    test "CreateUser decodes protobuf and creates user" do
+      binary = %Mcsv.UserRequest{name: "Alice", email: "alice@example.com"}
+               |> Mcsv.UserRequest.encode()
+      
+      conn = conn(:post, "/user_svc/CreateUser", binary)
+             |> put_req_header("content-type", "application/x-protobuf")
+             |> UserSvc.Router.call([])
+      
+      assert conn.status == 200
+      response = Mcsv.UserResponse.decode(conn.resp_body)
+      assert response.success == true
+    end
+  end
+  ```
+
+- [ ] **Contract testing** (Pact):
+  - Verify Protobuf contracts between services
+  - Consumer-driven contract tests
+  - Example: `user_svc` (consumer) → `job_svc` (provider)
+
+- [ ] **Load testing** (K6/Locust):
+  - Benchmark concurrent user creation (current manual: 1000+)
+  - Identify bottlenecks in image conversion pipeline
+  - Measure p95/p99 latency under load
+
+- [ ] **Chaos engineering**:
+  - Randomly kill containers to test resilience
+  - Network latency injection (simulate slow S3)
+  - Partition tolerance testing (split network)
+
+---
+
+## Event Sourcing vs Oban (Architectural Pattern)
+
+### **Current: Oban (State-Based Job Queue)**
+
+```elixir
+# Oban stores CURRENT STATE in SQLite
+jobs table:
+id | state      | worker           | args
+1  | completed  | EmailWorker      | %{user_id: 123}
+2  | executing  | ImageWorker      | %{job_id: 456}
+3  | failed     | ImageWorker      | %{job_id: 789}
+
+# You know WHERE the job is NOW, but not HOW it got there
+# Lost information: retries, who cancelled, why it failed, etc.
+```
+
+**Pros**:
+- ✅ Simple to understand and use
+- ✅ Built-in retry logic
+- ✅ Low storage overhead (one row per job)
+- ✅ Fast queries (index on `state`)
+
+**Cons**:
+- ❌ No audit trail (can't answer "who cancelled this job?")
+- ❌ Can't replay history (can't reprocess from step 2)
+- ❌ Hard to debug (lost intermediate states)
+
+---
+
+### **Alternative: Event Sourcing**
+
+```elixir
+# Instead of storing CURRENT state, store ALL EVENTS
+events table:
+id | job_id | event_type        | data                      | timestamp
+1  | 456    | job_created       | %{user_id: 123}           | 2025-11-05 10:00:00
+2  | 456    | job_enqueued      | %{queue: "default"}       | 2025-11-05 10:00:01
+3  | 456    | job_started       | %{worker_pid: #PID<...>}  | 2025-11-05 10:00:05
+4  | 456    | conversion_failed | %{error: "timeout"}       | 2025-11-05 10:01:00
+5  | 456    | job_retried       | %{attempt: 2}             | 2025-11-05 10:02:00
+6  | 456    | job_completed     | %{pdf_url: "s3://..."}    | 2025-11-05 10:02:30
+
+# Current state = reduce(events)
+# State at any time = reduce(events up to timestamp)
+```
+
+**Pros**:
+- ✅ **Complete audit trail**: "Who did what, when, and why?"
+- ✅ **Time travel**: Replay events to see state at any point
+- ✅ **Debuggability**: See exact sequence of events leading to failure
+- ✅ **Event-driven architecture**: Other services can subscribe to events
+- ✅ **Analytics**: Answer business questions ("How many jobs fail on first attempt?")
+
+**Cons**:
+- ❌ **Complexity**: More code to write (event handlers, reducers)
+- ❌ **Storage overhead**: 10x more rows (one per event vs one per job)
+- ❌ **Query complexity**: Must reduce events to get current state
+- ❌ **Learning curve**: Requires mental shift from CRUD to events
+
+---
+
+### **Example: Job Retry with Event Sourcing**
+
+```elixir
+# Traditional Oban (state update)
+def handle_failure(job) do
+  # Lost info: what was the error? how many times retried?
+  Oban.update(job, %{state: "failed", attempts: job.attempts + 1})
+end
+
+# Event Sourcing (append events)
+def handle_failure(job, error) do
+  EventStore.append([
+    %JobEvent{type: :job_failed, job_id: job.id, data: %{
+      error: error,
+      attempt: job.attempts,
+      worker_pid: self(),
+      timestamp: DateTime.utc_now()
+    }},
+    %JobEvent{type: :job_retried, job_id: job.id, data: %{
+      next_attempt_at: DateTime.add(DateTime.utc_now(), 60, :second),
+      retry_reason: "automatic_retry_policy"
+    }}
+  ])
+end
+
+# Later, you can ask:
+# "Show me all jobs that failed due to timeout on their 3rd attempt"
+EventStore.query(
+  event_type: :job_failed,
+  data: %{error: "timeout", attempt: 3}
+)
+```
+
+---
+
+### **When to Use Event Sourcing?**
+
+**Good fit** (consider migrating):
+- ✅ Need **audit trail** (compliance, debugging)
+- ✅ Need **time travel** (replay events, reprocess data)
+- ✅ **Complex workflows** (multiple state transitions)
+- ✅ **Event-driven architecture** (pub/sub between services)
+- ✅ **Analytics** on job behavior
+
+**Stick with Oban if**:
+- ✅ Simple job queue (send email, process image)
+- ✅ Don't need history (current state is enough)
+- ✅ Team is small (learning curve isn't worth it)
+- ✅ Low volume (<10k jobs/day)
+
+**Your case**: Oban is fine for now. Consider Event Sourcing if you need to answer:
+- "Why did this job fail 3 times before succeeding?"
+- "Replay all image conversions that failed due to MinIO timeout"
+- "Show me jobs cancelled by user X in the last 30 days"
+
+---
+
+## Resources

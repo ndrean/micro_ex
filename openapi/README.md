@@ -10,21 +10,32 @@ This directory contains OpenAPI 3.0 specifications for all microservices.
 
 ## Viewing the Documentation
 
-### Option 1: Swagger UI (Docker)
+### Option 1: Docker Compose (Recommended - Already Configured!)
+
+Both Redoc and Swagger UI are included in `docker-compose.yml`:
 
 ```bash
-# Serve all specs with Swagger UI
-docker run -p 8080:8080 \
-  -e URLS="[ \
-    {url: 'user_svc.yaml', name: 'User Service'}, \
-    {url: 'job_svc.yaml', name: 'Job Service'}, \
-    {url: 'image_svc.yaml', name: 'Image Service'} \
-  ]" \
-  -v $(pwd):/usr/share/nginx/html/api \
-  swaggerapi/swagger-ui
+# Start all services (from repo root)
+docker-compose up -d
 
-# Then open http://localhost:8080
+# Or start just the docs viewers
+docker-compose up -d redoc swagger-ui
 ```
+
+**Access the documentation:**
+
+- 📖 **Redoc** (clean, modern): http://localhost:8080
+  - User Service: http://localhost:8080?url=specs/user_svc.yaml
+  - Job Service: http://localhost:8080?url=specs/job_svc.yaml
+  - Image Service: http://localhost:8080?url=specs/image_svc.yaml
+
+- 🧪 **Swagger UI** (interactive testing): http://localhost:8085
+  - Dropdown selector to switch between services
+
+**Which to use?**
+
+- Use **Redoc** for reading/onboarding (beautiful, readable)
+- Use **Swagger UI** for testing APIs (has "Try it out" button)
 
 ### Option 2: Swagger Editor (Online)
 

@@ -7,6 +7,9 @@ defmodule EmailRouter do
   # Logger with request_id metadata (BEFORE :match)
   plug(Plug.Logger, log: :info)
 
+  # PromEx metrics plug (must be before Plug.Telemetry to avoid metrics pollution)
+  plug(PromEx.Plug, prom_ex_module: EmailSvc.PromEx)
+
   # Telemetry for metrics (BEFORE :match)
   plug(Plug.Telemetry, event_prefix: [:email_svc, :plug])
 
@@ -44,11 +47,11 @@ defmodule EmailRouter do
   end
 
   # Prometheus metrics endpoint
-  get "/metrics" do
-    metrics = TelemetryMetricsPrometheus.Core.scrape(:email_svc_metrics)
+  # get "/metrics" do
+  #   metrics = TelemetryMetricsPrometheus.Core.scrape(:email_svc_metrics)
 
-    conn
-    |> put_resp_content_type("text/plain; version=0.0.4")
-    |> send_resp(200, metrics)
-  end
+  #   conn
+  #   |> put_resp_content_type("text/plain; version=0.0.4")
+  #   |> send_resp(200, metrics)
+  # end
 end

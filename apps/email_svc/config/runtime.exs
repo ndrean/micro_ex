@@ -3,7 +3,7 @@ import Config
 # Runtime configuration for email_svc
 
 # HTTP Port
-port = System.get_env("PORT", "8083") |> String.to_integer()
+port = System.get_env("EMAIL_SVC_PORT", "8083") |> String.to_integer()
 
 config :email_svc,
   port: port
@@ -15,7 +15,7 @@ config :opentelemetry,
 
 config :opentelemetry_exporter,
   otlp_protocol: :http_protobuf,
-  otlp_endpoint: System.get_env("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318")
+  otlp_endpoint: System.get_env("OTEL_EXPORTER_OTLP_ENDPOINT", "http://127.0.0.1:4318")
 
 # Logger Configuration
 log_level = System.get_env("LOG_LEVEL", "info") |> String.to_atom()
@@ -48,8 +48,7 @@ adapter_module =
     _ -> Swoosh.Adapters.Local
   end
 
-config :email_svc, EmailService.Mailer,
-  adapter: adapter_module
+config :email_svc, EmailService.Mailer, adapter: adapter_module
 
 # SMTP config (only used if MAILER_ADAPTER=smtp)
 if adapter_module == Swoosh.Adapters.SMTP do

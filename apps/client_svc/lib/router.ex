@@ -9,6 +9,9 @@ defmodule ClientRouter do
   # Logger with request_id metadata (BEFORE :match)
   plug(Plug.Logger, log: :info)
 
+  # PromEx metrics plug (must be before Plug.Telemetry to avoid metrics pollution)
+  plug(PromEx.Plug, prom_ex_module: ClientSvc.PromEx)
+
   # Telemetry for metrics (BEFORE :match)
   plug(Plug.Telemetry, event_prefix: [:client_svc, :plug])
 
@@ -50,14 +53,14 @@ defmodule ClientRouter do
     send_resp(conn, 200, "READY")
   end
 
-  # Prometheus metrics endpoint
-  get "/metrics" do
-    metrics = TelemetryMetricsPrometheus.Core.scrape(:client_svc_metrics)
-
-    conn
-    |> put_resp_content_type("text/plain; version=0.0.4")
-    |> send_resp(200, metrics)
-  end
+  # Prometheus metrics endpoint (now handled by PromEx.Plug)
+  # get "/metrics" do
+  #   metrics = TelemetryMetricsPrometheus.Core.scrape(:client_svc_metrics)
+  #
+  #   conn
+  #   |> put_resp_content_type("text/plain; version=0.0.4")
+  #   |> send_resp(200, metrics)
+  # end
 
   # Unary-style endpoint - send user, get response
   # post "/user" do

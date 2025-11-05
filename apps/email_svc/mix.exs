@@ -15,9 +15,9 @@ defmodule EmailSvc.MixProject do
       releases: [
         email_svc: [
           applications: [
+            email_svc: :permanent,
             opentelemetry_exporter: :permanent,
-            opentelemetry: :temporary,
-            email_svc: :permanent
+            opentelemetry: :temporary
           ],
           include_executables_for: [:unix],
           strip_beams: false
@@ -31,6 +31,8 @@ defmodule EmailSvc.MixProject do
     [
       extra_applications: [
         :logger,
+        :inets,
+        :os_mon,
         :tls_certificate_check
       ],
       mod: {EmailApp, []}
@@ -56,6 +58,7 @@ defmodule EmailSvc.MixProject do
       {:tls_certificate_check, "~> 1.29"},
 
       # Prometheus metrics
+      {:prom_ex, "~> 1.11.0"},
       {:telemetry_metrics_prometheus_core, "~> 1.2"},
       {:telemetry_poller, "~> 1.3"},
 

@@ -15,9 +15,9 @@ defmodule UserSvc.MixProject do
       releases: [
         user_svc: [
           applications: [
+            user_svc: :permanent,
             opentelemetry_exporter: :permanent,
-            opentelemetry: :temporary,
-            user_svc: :permanent
+            opentelemetry: :temporary
           ],
           include_executables_for: [:unix],
           strip_beams: false
@@ -30,7 +30,7 @@ defmodule UserSvc.MixProject do
   def application do
     [
       # Only include OTP apps that need explicit startup ordering
-      extra_applications: [:logger, :tls_certificate_check],
+      extra_applications: [:logger, :inets, :os_mon, :tls_certificate_check],
       mod: {UserApp, []}
     ]
   end
@@ -60,6 +60,7 @@ defmodule UserSvc.MixProject do
       {:tls_certificate_check, "~> 1.29"},
 
       # Prometheus metrics
+      {:prom_ex, "~> 1.11.0"},
       {:telemetry_metrics_prometheus_core, "~> 1.2"},
       {:telemetry_poller, "~> 1.3"},
 

@@ -8,6 +8,9 @@ defmodule ImageSvc.Router do
   # Logger with request_id metadata
   plug(Plug.Logger, log: :info)
 
+  # PromEx metrics plug (must be before Plug.Telemetry to avoid metrics pollution)
+  plug(PromEx.Plug, prom_ex_module: ImageSvc.PromEx)
+
   # Telemetry for metrics
   plug(Plug.Telemetry, event_prefix: [:image_svc, :plug])
 
@@ -39,14 +42,14 @@ defmodule ImageSvc.Router do
     send_resp(conn, 200, "READY")
   end
 
-  # Prometheus metrics endpoint
-  get "/metrics" do
-    metrics = TelemetryMetricsPrometheus.Core.scrape(:image_svc_metrics)
-
-    conn
-    |> put_resp_content_type("text/plain; version=0.0.4")
-    |> send_resp(200, metrics)
-  end
+  # Prometheus metrics endpoint (now handled by PromEx.Plug)
+  # get "/metrics" do
+  #   metrics = TelemetryMetricsPrometheus.Core.scrape(:image_svc_metrics)
+  #
+  #   conn
+  #   |> put_resp_content_type("text/plain; version=0.0.4")
+  #   |> send_resp(200, metrics)
+  # end
 
   # OpenAPI documentation endpoints
   get "/api/openapi" do

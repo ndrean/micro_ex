@@ -1,7 +1,11 @@
 # Multi-stage Dockerfile for client_svc
 # Stage 1: Build the release
+ARG PORT=8085
 ARG ELIXIR_IMAGE=hexpm/elixir:1.19.2-erlang-28.1-alpine-3.22.2
 FROM ${ELIXIR_IMAGE} AS builder
+
+ARG PORT
+ENV PORT=${PORT}
 
 # Install build dependencies
 RUN apk add --no-cache \
@@ -38,6 +42,9 @@ RUN mix release
 # Stage 2: Create minimal runtime image
 FROM alpine:3.22.2 AS app
 
+ARG PORT
+ENV PORT=${PORT}
+
 # Install runtime dependencies
 RUN apk add --no-cache \
     bash \
@@ -59,11 +66,11 @@ COPY --from=builder --chown=appuser:appuser /app/_build/prod/rel/client_svc ./
 USER appuser
 
 # Expose port (can be overridden with PORT env var)
-EXPOSE 4000
+EXPOSE ${PORT}
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD ["/bin/sh", "-c", "wget -q --spider http://localhost:${PORT:-4000}/health || exit 1"]
+    CMD ["/bin/sh", "-c", "wget -q --spider http://localhost:${PORT}/health || exit 1"]
 
 # Start the application
 CMD ["bin/client_svc", "start"]

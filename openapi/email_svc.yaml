@@ -1,0 +1,162 @@
+openapi: 3.0.0
+info:
+  title: Email Service API
+  description: Email delivery service using SMTP/local adapter
+  version: 1.0.0
+servers:
+  - url: http://localhost:8083
+    description: Local development
+
+paths:
+  /email_svc/SendEmail:
+    post:
+      summary: Send email via configured mailer adapter
+      description: |
+        Sends an email using the configured mailer adapter (SMTP or local).
+        Uses Swoosh for email delivery with configurable adapters.
+      operationId: sendEmail
+      requestBody:
+        required: true
+        content:
+          application/x-protobuf:
+            schema:
+              type: object
+              required:
+                - to_email
+                - subject
+                - body
+              properties:
+                to_email:
+                  type: string
+                  format: email
+                  description: Recipient email address
+                  example: user@example.com
+                subject:
+                  type: string
+                  description: Email subject line
+                  example: Welcome to our service
+                body:
+                  type: string
+                  description: Email body content (plain text or HTML)
+                  example: Thank you for joining!
+                from_email:
+                  type: string
+                  format: email
+                  description: Sender email address (optional, uses default if not provided)
+                  example: noreply@example.com
+      responses:
+        "200":
+          description: Email sent successfully
+          content:
+            application/x-protobuf:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Email sent successfully
+        "400":
+          description: Invalid request (missing required fields)
+          content:
+            application/x-protobuf:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Missing required field 'to_email'
+        "500":
+          description: Email delivery failed
+          content:
+            application/x-protobuf:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: SMTP connection failed
+
+  /health:
+    get:
+      summary: Health check endpoint (liveness)
+      description: Simple liveness probe to verify the service is running
+      operationId: healthCheck
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: OK
+    head:
+      summary: Health check endpoint (HEAD request)
+      description: Lightweight health check for container orchestration
+      operationId: healthCheckHead
+      responses:
+        "200":
+          description: Service is healthy
+
+  /health/ready:
+    get:
+      summary: Readiness check endpoint
+      description: Verifies service dependencies are available (e.g., SMTP server connectivity)
+      operationId: readinessCheck
+      responses:
+        "200":
+          description: Service is ready to accept traffic
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: READY
+        "503":
+          description: Service dependencies are not ready
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: NOT READY
+
+components:
+  schemas:
+    EmailRequest:
+      type: object
+      required:
+        - to_email
+        - subject
+        - body
+      properties:
+        to_email:
+          type: string
+          format: email
+        subject:
+          type: string
+        body:
+          type: string
+        from_email:
+          type: string
+          format: email
+
+    EmailResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+
+tags:
+  - name: Email
+    description: Email delivery operations
+  - name: Health
+    description: Service health and readiness checks

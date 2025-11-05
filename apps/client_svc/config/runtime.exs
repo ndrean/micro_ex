@@ -4,11 +4,12 @@ import Config
 # All values can be overridden via environment variables
 
 # HTTP Port
-port = System.get_env("PORT", "4000") |> String.to_integer()
+port = System.get_env("CLIENT_SVC_PORT", "8085") |> String.to_integer()
 
 config :client_svc,
   port: port,
-  user_svc_base_url: System.get_env("USER_SVC_URL", "http://localhost:8081"),
+  # Use USER_SVC_URL from docker-compose (http://user_svc:8081) or fallback to localhost for dev
+  user_svc_base_url: System.get_env("USER_SVC_URL", "http://127.0.0.1:#{System.get_env("USER_SVC_PORT", "8081")}"),
   user_endpoints: %{
     create: "/user_svc/CreateUser",
     convert_image: "/user_svc/ConvertImage"
@@ -21,7 +22,7 @@ config :opentelemetry,
 
 config :opentelemetry_exporter,
   otlp_protocol: :http_protobuf,
-  otlp_endpoint: System.get_env("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318")
+  otlp_endpoint: System.get_env("OTEL_EXPORTER_OTLP_ENDPOINT", "http://127.0.0.1:4318")
 
 # Logger Configuration
 log_level = System.get_env("LOG_LEVEL", "info") |> String.to_atom()

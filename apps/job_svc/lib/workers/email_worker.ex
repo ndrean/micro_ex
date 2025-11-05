@@ -20,34 +20,44 @@ defmodule JobService.Workers.EmailWorker do
   @impl Oban.Worker
 
   @spec perform(Oban.Job.t()) :: :ok | {:error, any()}
-  def perform(%Oban.Job{args: %{"type" => "welcome"} = args}) do
+  def perform(%Oban.Job{args: args} = job) do
+    Logger.info("[EmailWorker] Received job with args: #{inspect(args)}")
+    do_perform(args)
+  end
+
+  defp do_perform(%{"type" => "welcome"} = args) do
     # Extract and attach OpenTelemetry trace context from job args
-    attach_trace_context(args)
+    :ok = attach_trace_context(args)
 
     Logger.info("[EmailWorker] Sending #{args["type"]} email to user #{args["id"]}")
+
     EmailSvcClient.send_email(args)
   end
 
-  def perform(%Oban.Job{args: %{"type" => "notification"} = args}) do
+  defp do_perform(%{"type" => "notification"} = args) do
     # Extract and attach OpenTelemetry trace context from job args
-    attach_trace_context(args)
+    :ok =
+      attach_trace_context(args)
 
     Logger.info("[EmailWorker] Sending notification email to user #{args["user_id"]}")
+
     EmailSvcClient.send_email(args)
   end
 
-  def perform(%Oban.Job{args: args}) do
+  defp do_perform(args) do
     Logger.error("[EmailWorker] Unknown email type: #{inspect(args)}")
     {:error, "Unknown email type"}
   end
 
   # Extract OpenTelemetry trace context from job args and attach to current process
   @spec attach_trace_context(map()) :: :ok
-  defp attach_trace_context(%{"_otel_trace_context" => trace_context})
+  defp attach_trace_context(%{"_otel_trace_context" => trace_context} = _args)
        when is_map(trace_context) do
     # Convert map back to list of tuples for extraction
     trace_headers = Enum.into(trace_context, [])
+
     :otel_propagator_text_map.extract(trace_headers)
+    :ok
   end
 
   defp attach_trace_context(_args), do: :ok

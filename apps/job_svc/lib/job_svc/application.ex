@@ -16,9 +16,11 @@ defmodule JobApp do
     # OpentelemetryOban.setup(trace: [:jobs])  # Disabled: dependency conflict with opentelemetry_req
 
     children = [
+      # PromEx must start before Repo to capture Ecto init events
+      JobSvc.PromEx,
       JobService.Repo,
       JobService.Metrics,
-      {Bandit, plug: JobRouter, port: 8082},
+      {Bandit, plug: JobRouter, port: port},
       {Oban, Application.fetch_env!(:job_svc, Oban)}
     ]
 

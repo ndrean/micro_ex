@@ -14,6 +14,13 @@ config :email_svc, EmailService.Mailer, adapter: Swoosh.Adapters.Local
 config :swoosh, :api_client, false
 config :swoosh, :json_library, JSON
 
+config :email_svc, EmailSvc.PromEx,
+  disabled: false,
+  manual_metrics_start_delay: :no_delay,
+  drop_metrics_groups: [],
+  grafana: :disabled,
+  metrics_server: :disabled
+
 # Logger configuration - uses Docker Loki driver for log shipping
 config :logger,
   level: :info

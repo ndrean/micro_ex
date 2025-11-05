@@ -1,0 +1,14 @@
+apiVersion: 1
+
+providers:
+  # Provider for PromEx dashboards
+  - name: "PromEx Dashboards"
+    orgId: 1
+    folder: "PromEx"
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

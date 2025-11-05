@@ -1,7 +1,12 @@
 # Multi-stage Dockerfile for job_svc
 # Stage 1: Build the release
+ARG PORT=8082
 ARG ELIXIR_IMAGE=hexpm/elixir:1.19.2-erlang-28.1-alpine-3.22.2
 FROM ${ELIXIR_IMAGE} AS builder
+
+# Service port (12-factor: configurable at build and runtime)
+ARG PORT
+ENV PORT=${PORT}
 
 # Install build dependencies
 RUN apk add --no-cache \
@@ -38,6 +43,9 @@ RUN mix release
 # Stage 2: Create minimal runtime image
 FROM alpine:3.22.2 AS app
 
+ARG PORT
+ENV PORT=${PORT}
+
 # Install runtime dependencies
 RUN apk add --no-cache \
     bash \
@@ -62,11 +70,11 @@ RUN mkdir -p /app/db && chown -R appuser:appuser /app/db
 USER appuser
 
 # Expose port (can be overridden with PORT env var)
-EXPOSE 8082
+EXPOSE ${PORT}
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD ["/bin/sh", "-c", "wget -q --spider http://localhost:${PORT:-8082}/health || exit 1"]
+    CMD ["/bin/sh", "-c", "wget -q --spider http://localhost:${PORT}/health || exit 1"]
 
 # Start the application
 CMD ["bin/job_svc", "start"]

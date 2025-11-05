@@ -5,11 +5,11 @@ services:
       context: ./apps/user_svc
       dockerfile: Dockerfile
       args:
-        ELIXIR_IMAGE: hexpm/elixir:1.19.2-erlang-28.1-alpine-3.22.2
+        ELIXIR_IMAGE: ${ELIXIR_IMAGE}
 
     container_name: msvc-user-svc
     ports:
-      - "8081:8081"
+      - ${USER_SVC_PORT}:${USER_SVC_HOST_PORT}
 
     develop:
       watch:
@@ -18,37 +18,25 @@ services:
         - action: rebuild
           path: ./apps/user_svc/mix.exs
 
+    env_file:
+      - .env.staging
+
     environment:
-      # Application config
-      PORT: "8081"
-      MIX_ENV: "prod"
-
-      # Service URLs (use Docker service names)
-      USER_SVC_URL: "http://user_svc:8081"
-      JOB_SVC_URL: "http://job_svc:8082"
-      CLIENT_SVC_URL: "http://client_svc:4000"
-
-      # MinIO config
-      MINIO_ACCESS_KEY: "minioadmin"
-      MINIO_SECRET_KEY: "minioadmin"
-      MINIO_SCHEME: "http://"
-      MINIO_HOST: "minio"
-      MINIO_PORT: "9000"
-      AWS_REGION: "us-east-1"
-
-      # OpenTelemetry config
+      # Service-specific overrides
+      PORT: "${USER_SVC_PORT}"
       OTEL_SERVICE_NAME: "user_svc"
-      OTEL_EXPORTER_OTLP_ENDPOINT: "http://jaeger:4318"
 
-      # Logging config
-      LOG_LEVEL: "info"
-      # LOG_FORMAT: "json"  # Uncomment for JSON logs
+      # Docker-specific config (override .env for internal networking)
+      MINIO_HOST: "minio"
+      USER_SVC_URL: "http://user_svc:${USER_SVC_PORT}"
+      JOB_SVC_URL: "http://job_svc:${JOB_SVC_PORT}"
+      CLIENT_SVC_URL: "http://client_svc:${CLIENT_SVC_PORT}"
 
     depends_on:
       - minio
       - jaeger
     healthcheck:
-      test: [ "CMD", "wget", "-q", "--spider", "http://localhost:8081/health" ]
+      test: [ "CMD", "wget", "-q", "--spider", "http://127.0.0.1:${USER_SVC_PORT}/health" ]
       interval: 30s
       timeout: 3s
       retries: 3
@@ -59,11 +47,11 @@ services:
       context: ./apps/client_svc
       dockerfile: Dockerfile
       args:
-        ELIXIR_IMAGE: hexpm/elixir:1.19.2-erlang-28.1-alpine-3.22.2
+        ELIXIR_IMAGE: ${ELIXIR_IMAGE}
 
     container_name: msvc-client-svc
     ports:
-      - "4000:4000"
+      - ${CLIENT_SVC_PORT}:${CLIENT_SVC_HOST_PORT}
 
     develop:
       watch:
@@ -72,38 +60,33 @@ services:
         - action: rebuild
           path: ./apps/client_svc/mix.exs
 
+    env_file:
+      - .env.staging
+
     environment:
-      # Application config
-      PORT: "4000"
-      MIX_ENV: "prod"
-
-      # Service URLs (use Docker service names)
-      USER_SVC_URL: "http://user_svc:8081"
-
-      # OpenTelemetry config
+      # Service-specific overrides
+      PORT: ${CLIENT_SVC_PORT}
       OTEL_SERVICE_NAME: "client_svc"
-      OTEL_EXPORTER_OTLP_ENDPOINT: "http://jaeger:4318"
 
-      # Logging config
-      LOG_LEVEL: "info"
-      # LOG_FORMAT: "json"  # Uncomment for JSON logs
+      # Docker-specific config (override .env for internal networking)
+      USER_SVC_URL: "http://user_svc:${USER_SVC_PORT}"
 
-    # Docker Loki logging driver (commented - using Promtail instead)
-    # logging:
-    #   driver: loki
-    #   options:
-    #     loki-url: "http://localhost:3100/loki/api/v1/push"
-    #     loki-batch-size: "400"
-    #     loki-retries: "3"
-    #     labels: "service,environment"
-    #     loki-external-labels: "service=client_svc,environment=dev"
+      # Docker Loki logging driver (commented - using Promtail instead)
+      # logging:
+      #   driver: loki
+      #   options:
+      #     loki-url: "http://localhost:3100/loki/api/v1/push"
+      #     loki-batch-size: "400"
+      #     loki-retries: "3"
+      #     labels: "service,environment"
+      #     loki-external-labels: "service=client_svc,environment=dev"
 
     depends_on:
       - user_svc
       - jaeger
       - loki
     healthcheck:
-      test: [ "CMD", "wget", "-q", "--spider", "http://localhost:4000/health" ]
+      test: [ "CMD", "wget", "-q", "--spider", "http://127.0.0.1:${CLIENT_SVC_PORT}/health" ]
       interval: 30s
       timeout: 3s
       retries: 3
@@ -114,11 +97,11 @@ services:
       context: ./apps/job_svc
       dockerfile: Dockerfile
       args:
-        ELIXIR_IMAGE: hexpm/elixir:1.19.2-erlang-28.1-alpine-3.22.2
+        ELIXIR_IMAGE: ${ELIXIR_IMAGE}
 
     container_name: msvc-job-svc
     ports:
-      - "8082:8082"
+      - ${JOB_SVC_PORT}:${JOB_SVC_HOST_PORT}
 
     develop:
       watch:
@@ -127,37 +110,22 @@ services:
         - action: rebuild
           path: ./apps/job_svc/mix.exs
 
+    env_file:
+      - .env.staging
+
     environment:
-      # Application config
-      PORT: "8082"
-      MIX_ENV: "prod"
-
-      # Service URLs (use Docker service names)
-      IMAGE_SVC_URL: "http://image_svc:8084"
-      EMAIL_SVC_URL: "http://email_svc:8083"
-      USER_SVC_URL: "http://user_svc:8081"
-      IMAGE_SVC: "msvc-images"
-      IMAGE_BUCKET_MAX_AGE: 3600
-
-      # OpenTelemetry config
+      # Service-specific overrides
+      PORT: ${JOB_SVC_PORT}
       OTEL_SERVICE_NAME: "job_svc"
-      OTEL_EXPORTER_OTLP_ENDPOINT: "http://jaeger:4318"
-
-      # Logging config
-      LOG_LEVEL: "info"
-      # LOG_FORMAT: "json"  # Uncomment for JSON logs
-
-      # Database config (SQLite for Oban)
       DATABASE_PATH: "/app/db/job_service.db"
-      DB_POOL_SIZE: "5"
 
-      # MinIO config (for cleanup worker)
-      MINIO_ACCESS_KEY: "minioadmin"
-      MINIO_SECRET_KEY: "minioadmin"
-      MINIO_SCHEME: "http://"
+      # Docker-specific config (override .env for internal networking)
       MINIO_HOST: "minio"
-      MINIO_PORT: "9000"
-      AWS_REGION: "us-east-1"
+      MINIO_SCHEME: "http://"
+      IMAGE_SVC_URL: "http://image_svc:${IMAGE_SVC_PORT}"
+      EMAIL_SVC_URL: "http://email_svc:${EMAIL_SVC_PORT}"
+      USER_SVC_URL: "http://user_svc:${USER_SVC_PORT}"
+      IMAGE_SVC: "msvc-images"
 
     volumes:
       - job-data:/app/db # Persist SQLite database
@@ -166,7 +134,7 @@ services:
       - minio
       - jaeger
     healthcheck:
-      test: [ "CMD", "wget", "-q", "--spider", "http://localhost:8082/health" ]
+      test: [ "CMD", "wget", "-q", "--spider", "http://127.0.0.1:${JOB_SVC_PORT}/health" ]
       interval: 30s
       timeout: 3s
       retries: 3
@@ -177,11 +145,11 @@ services:
       context: ./apps/image_svc
       dockerfile: Dockerfile
       args:
-        ELIXIR_IMAGE: hexpm/elixir:1.19.2-erlang-28.1-alpine-3.22.2
+        ELIXIR_IMAGE: ${ELIXIR_IMAGE}
 
     container_name: msvc-image-svc
     ports:
-      - "8084:8084"
+      - ${IMAGE_SVC_PORT}:${IMAGE_SVC_HOST_PORT}
 
     develop:
       watch:
@@ -190,35 +158,25 @@ services:
         - action: rebuild
           path: ./apps/image_svc/mix.exs
 
+    env_file:
+      - .env.staging
+
     environment:
-      # Application config
-      PORT: "8084"
-      MIX_ENV: "prod"
-
-      # Service URLs (use Docker service names)
-      USER_SVC_URL: "http://user_svc:8081"
-
-      # MinIO config
-      MINIO_ACCESS_KEY: "minioadmin"
-      MINIO_SECRET_KEY: "minioadmin"
-      MINIO_SCHEME: "http://"
-      MINIO_HOST: "minio"
-      MINIO_PORT: "9000"
-      AWS_REGION: "us-east-1"
-
-      # OpenTelemetry config
+      # Service-specific overrides
+      PORT: ${IMAGE_SVC_PORT}
       OTEL_SERVICE_NAME: "image_svc"
-      OTEL_EXPORTER_OTLP_ENDPOINT: "http://jaeger:4318"
 
-      # Logging config
-      LOG_LEVEL: "info"
-      # LOG_FORMAT: "json"  # Uncomment for JSON logs
+      # Docker-specific config (override .env for internal networking)
+      MINIO_HOST: "minio"
+      MINIO_SCHEME: "http://"
+      USER_SVC_URL: "http://user_svc:${USER_SVC_PORT}"
 
     depends_on:
       - minio
       - jaeger
     healthcheck:
-      test: [ "CMD", "wget", "-q", "--spider", "http://localhost:8084/health" ]
+      test: [ "CMD", "wget", "-q", "--spider", "http://127.0.0.1:${IMAGE_SVC_PORT}/health" ]
+
       interval: 30s
       timeout: 3s
       retries: 3
@@ -229,11 +187,11 @@ services:
       context: ./apps/email_svc
       dockerfile: Dockerfile
       args:
-        ELIXIR_IMAGE: hexpm/elixir:1.19.2-erlang-28.1-alpine-3.22.2
+        ELIXIR_IMAGE: ${ELIXIR_IMAGE}
 
     container_name: msvc-email-svc
     ports:
-      - "8083:8083"
+      - ${EMAIL_SVC_PORT}:${EMAIL_SVC_HOST_PORT}
 
     develop:
       watch:
@@ -242,26 +200,19 @@ services:
         - action: rebuild
           path: ./apps/email_svc/mix.exs
 
+    env_file:
+      - .env.staging
+
     environment:
-      # Application config
-      PORT: "8083"
-      MIX_ENV: "prod"
-
-      # OpenTelemetry config
+      # Service-specific overrides
+      PORT: ${EMAIL_SVC_PORT}
       OTEL_SERVICE_NAME: "email_svc"
-      OTEL_EXPORTER_OTLP_ENDPOINT: "http://jaeger:4318"
-
-      # Logging config
-      LOG_LEVEL: "info"
-      # LOG_FORMAT: "json"  # Uncomment for JSON logs
-
-      # Mailer config (Local adapter - no SMTP needed!)
       MAILER_ADAPTER: "local"
 
     depends_on:
       - jaeger
     healthcheck:
-      test: [ "CMD", "wget", "-q", "--spider", "http://localhost:8083/health" ]
+      test: [ "CMD", "wget", "-q", "--spider", "http://127.0.0.1:${EMAIL_SVC_PORT}/health" ]
       interval: 30s
       timeout: 3s
       retries: 3
@@ -270,16 +221,15 @@ services:
     image: minio/minio:latest
     container_name: msvc-minio
     ports:
-      - "9000:9000" # API port
-      - "9001:9001" # Console UI port
-    environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+      - ${MINIO_PORT}:9000 # API port
+      - ${MINIO_CONSOLE_PORT}:9001 # Console UI port
+    env_file:
+      - .env.staging
     command: server /data --console-address ":9001"
     volumes:
       - minio-data:/data
     healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
+      test: [ "CMD", "curl", "-f", "http://127.0.0.1:9000/minio/health/live" ]
       interval: 30s
       timeout: 20s
       retries: 3
@@ -288,9 +238,8 @@ services:
   minio-init:
     image: minio/mc:latest
     container_name: msvc-minio-init
-    environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+    env_file:
+      - .env.staging
     depends_on:
       minio:
         condition: service_healthy
@@ -308,14 +257,14 @@ services:
     image: jaegertracing/jaeger:latest
     container_name: msvc-jaeger
     ports:
-      - "16686:16686" # Jaeger UI
-      - "4318:4318" # OTLP HTTP receiver (for OpenTelemetry)
-      - "4317:4317" # OTLP gRPC receiver (alternative)
+      - ${JAEGER_UI_PORT}:16686 # Jaeger UI
+      - ${JAEGER_OTLP_HTTP_PORT}:4318 # OTLP HTTP receiver (for OpenTelemetry)
+      - ${JAEGER_OTLP_GRPC_PORT}:4317 # OTLP gRPC receiver (alternative)
     environment:
       - COLLECTOR_OTLP_ENABLED=true
       - LOG_LEVEL=debug
     healthcheck:
-      test: [ "CMD", "wget", "--spider", "-q", "http://localhost:16686" ]
+      test: [ "CMD", "wget", "--spider", "-q", "http://127.0.0.1:16686" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -325,7 +274,7 @@ services:
     image: prom/prometheus:latest
     container_name: msvc-prometheus
     ports:
-      - "9090:9090" # Prometheus UI and API
+      - ${PROMETHEUS_UI_PORT}:9090 # Prometheus UI and API
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
       - prometheus-data:/prometheus
@@ -341,7 +290,7 @@ services:
       - image_svc
       - email_svc
     healthcheck:
-      test: [ "CMD", "wget", "--spider", "-q", "http://localhost:9090/-/healthy" ]
+      test: [ "CMD", "wget", "--spider", "-q", "http://127.0.0.1:9090/-/healthy" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -351,7 +300,7 @@ services:
     image: grafana/loki:latest
     container_name: msvc-loki
     ports:
-      - "3100:3100" # Loki API
+      - ${LOKI_PORT}:3100 # Loki API
     command: -config.file=/etc/loki/config.yml
     volumes:
       - ./loki/config.yml:/etc/loki/config.yml # Mount custom config with MinIO
@@ -359,7 +308,7 @@ services:
     depends_on:
       - minio-init # Wait for MinIO buckets to be initialized
     healthcheck:
-      test: [ "CMD", "wget", "--spider", "-q", "http://localhost:3100/ready" ]
+      test: [ "CMD", "wget", "--spider", "-q", "http://127.0.0.1:3100/ready" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -383,20 +332,60 @@ services:
     image: grafana/grafana:latest
     container_name: msvc-grafana
     ports:
-      - "3000:3000" # Grafana UI
-    environment:
-      - GF_AUTH_ANONYMOUS_ENABLED=true
-      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
-      - GF_AUTH_DISABLE_LOGIN_FORM=true
+      - ${GRAFANA_UI_PORT}:3000 # Grafana UI
+    env_file:
+      - .env.staging
     volumes:
       - grafana-data:/var/lib/grafana
-      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
     depends_on:
       - loki
       - jaeger
       - prometheus
     healthcheck:
-      test: [ "CMD", "wget", "--spider", "-q", "http://localhost:3000/api/health" ]
+      test: [ "CMD", "wget", "--spider", "-q", "http://127.0.0.1:3000/api/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Redoc - API Documentation Viewer (clean, modern UI)
+  redoc:
+    image: redocly/redoc:latest
+    container_name: msvc-redoc
+    ports:
+      - ${REDOC_PORT}:80
+    env_file:
+      - .env.staging
+    volumes:
+      - ./openapi:/usr/share/nginx/html/specs:ro
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Swagger UI - Interactive API Documentation (for testing)
+  swagger-ui:
+    image: swaggerapi/swagger-ui:latest
+    container_name: msvc-swagger-ui
+    ports:
+      - ${SWAGGER_UI_PORT}:8080
+    env_file:
+      - .env.staging
+    environment:
+      # Service-specific configuration
+      URLS: >
+        [
+          { url: "specs/user_svc.yaml", name: "User Service (${USER_SVC_PORT})" },
+          { url: "specs/job_svc.yaml", name: "Job Service (${JOB_SVC_PORT})" },
+          { url: "specs/image_svc.yaml", name: "Image Service (${IMAGE_SVC_PORT})" }
+        ]
+      URLS_PRIMARY_NAME: "User Service (${USER_SVC_PORT})"
+    volumes:
+      - ./openapi:/usr/share/nginx/html/specs:ro
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:8080"]
       interval: 30s
       timeout: 10s
       retries: 3

@@ -21,13 +21,25 @@ config :job_svc, Oban,
     images: 10,
     cleanup: 5
   ],
-  crontab: [
-    # Cleanup old images every 15 minutes (files older than 1 hour)
-    {"*/15 * * * *", StorageCleanupWorker}
+  plugins: [
+    # Cron plugin for scheduled jobs
+    {Oban.Plugins.Cron,
+     crontab: [
+       # Cleanup old images every 15 minutes (files older than 1 hour)
+       {"*/15 * * * *", StorageCleanupWorker}
+     ]}
   ]
 
 # OpenTelemetry Ecto instrumentation
 config :opentelemetry_ecto, :tracer, repos: [JobService.Repo]
+
+# PromEx configuration for Prometheus metrics
+config :job_svc, JobSvc.PromEx,
+  disabled: false,
+  manual_metrics_start_delay: :no_delay,
+  drop_metrics_groups: [],
+  grafana: :disabled,
+  metrics_server: :disabled
 
 # Logger configuration - uses Docker Loki driver for log shipping
 config :logger,
