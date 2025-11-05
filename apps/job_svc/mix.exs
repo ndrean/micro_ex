@@ -29,7 +29,7 @@ defmodule JobSvc.MixProject do
   # Run "mix help compile.app" to learn about applications.
   def application do
     [
-      extra_applications: [:logger, :inets, :tls_certificate_check],
+      extra_applications: [:logger, :os_mon, :inets, :tls_certificate_check],
       mod: {JobApp, []}
     ]
   end

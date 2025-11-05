@@ -14,12 +14,15 @@ defmodule StorageCleanupWorker do
 
   # @bucket "msvc-images"
   # @max_age_seconds 3600
+  @spec image_bucket() :: binary()
   defp image_bucket, do: Application.get_env(:job_svc, :image_bucket)
 
+  @spec max_age_seconds() :: integer()
   defp max_age_seconds,
     do: Application.get_env(:job_svc, :image_bucket_max_age) |> String.to_integer()
 
   @impl Oban.Worker
+  @spec perform(Oban.Job.t()) :: :ok | {:error, any()}
   def perform(_job) do
     Logger.info("[StorageCleanup] Starting cleanup of files older than #{max_age_seconds()}s")
 
@@ -33,6 +36,7 @@ defmodule StorageCleanupWorker do
     end
   end
 
+  @spec list_all_objects() :: {:ok, list(map())} | {:error, any()}
   defp list_all_objects do
     request =
       image_bucket()
@@ -48,6 +52,7 @@ defmodule StorageCleanupWorker do
     end
   end
 
+  @spec cleanup_old_files(list(map())) :: :ok | {:error, any()}
   defp cleanup_old_files(objects) do
     now = System.system_time(:second)
     cutoff_time = now - max_age_seconds()
@@ -62,6 +67,7 @@ defmodule StorageCleanupWorker do
     :ok
   end
 
+  @spec should_delete?(binary(), integer()) :: boolean()
   defp should_delete?(key, cutoff_time) do
     case parse_timestamp(key) do
       {:ok, timestamp} ->
@@ -72,6 +78,7 @@ defmodule StorageCleanupWorker do
     end
   end
 
+  @spec parse_timestamp(binary()) :: {:ok, integer()} | :error
   defp parse_timestamp(key) do
     # Extract timestamp from key: "1762116318937316_7CjhIdQpjf8.pdf"
     #  {unix_timestamp_microseconds}_{random_string}.{extension}
@@ -91,6 +98,7 @@ defmodule StorageCleanupWorker do
     end
   end
 
+  @spec delete_object(map()) :: :ok | {:error, any()}
   defp delete_object(object) do
     case ExAws.S3.delete_object(image_bucket(), object.key) |> ExAws.request() do
       {:ok, _} ->

@@ -27,6 +27,7 @@ defmodule ImageSvc.MixProject do
     [
       extra_applications: [
         :logger,
+        :os_mon,
         :tls_certificate_check
       ],
       mod: {ImageSvc.Application, []}

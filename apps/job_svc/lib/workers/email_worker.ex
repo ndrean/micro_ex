@@ -42,7 +42,9 @@ defmodule JobService.Workers.EmailWorker do
   end
 
   # Extract OpenTelemetry trace context from job args and attach to current process
-  defp attach_trace_context(%{"_otel_trace_context" => trace_context}) when is_map(trace_context) do
+  @spec attach_trace_context(map()) :: :ok
+  defp attach_trace_context(%{"_otel_trace_context" => trace_context})
+       when is_map(trace_context) do
     # Convert map back to list of tuples for extraction
     trace_headers = Enum.into(trace_context, [])
     :otel_propagator_text_map.extract(trace_headers)

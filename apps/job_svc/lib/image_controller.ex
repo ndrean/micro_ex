@@ -8,6 +8,7 @@ defmodule ImageController do
 
   Receives ImageConversionRequest protobuf, enqueues Oban job, returns acknowledgment.
   """
+  @spec convert(Plug.Conn.t()) :: Plug.Conn.t()
   def convert(conn) do
     {:ok, binary_body, conn} = Plug.Conn.read_body(conn)
 
@@ -50,6 +51,8 @@ defmodule ImageController do
     end
   end
 
+  @spec enqueue_conversion_job(Mcsv.ImageConversionRequest.t()) ::
+          {:ok, Oban.Job.t()} | {:error, any()}
   defp enqueue_conversion_job(%Mcsv.ImageConversionRequest{} = job_args) do
     # Inject OpenTelemetry trace context into job args
     trace_headers = :otel_propagator_text_map.inject([])

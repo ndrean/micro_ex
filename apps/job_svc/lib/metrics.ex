@@ -60,29 +60,29 @@ defmodule JobService.Metrics do
       ),
 
       # Image conversion metrics
-      # Telemetry.Metrics.counter("image_svc.conversion.count",
-      #   tags: [:status],
-      #   description: "Total number of image conversions"
-      # ),
-      # Telemetry.Metrics.distribution("image_svc.conversion.duration",
-      #   unit: {:native, :millisecond},
-      #   description: "Job conversion duration",
-      #   reporter_options: [buckets: [100, 500, 1000, 2000, 5000, 10_000, 30_000]]
-      # ),
-      # Telemetry.Metrics.distribution("image_svc.conversion.input_size",
-      #   unit: :byte,
-      #   description: "Input image size in bytes",
-      #   reporter_options: [
-      #     buckets: [1024, 10_240, 102_400, 512_000, 1_048_576, 5_242_880, 10_485_760]
-      #   ]
-      # ),
-      # Telemetry.Metrics.distribution("image_svc.conversion.output_size",
-      #   unit: :byte,
-      #   description: "Output PDF size in bytes",
-      #   reporter_options: [
-      #     buckets: [1024, 10_240, 102_400, 512_000, 1_048_576, 5_242_880, 10_485_760]
-      #   ]
-      # ),
+      Telemetry.Metrics.counter("image_svc.conversion.count",
+        tags: [:status],
+        description: "Total number of image conversions"
+      ),
+      Telemetry.Metrics.distribution("image_svc.conversion.duration",
+        unit: {:native, :millisecond},
+        description: "Job conversion duration",
+        reporter_options: [buckets: [100, 500, 1000, 2000, 5000, 10_000, 30_000]]
+      ),
+      Telemetry.Metrics.distribution("image_svc.conversion.input_size",
+        unit: :byte,
+        description: "Input image size in bytes",
+        reporter_options: [
+          buckets: [1024, 10_240, 102_400, 512_000, 1_048_576, 5_242_880, 10_485_760]
+        ]
+      ),
+      Telemetry.Metrics.distribution("image_svc.conversion.output_size",
+        unit: :byte,
+        description: "Output PDF size in bytes",
+        reporter_options: [
+          buckets: [1024, 10_240, 102_400, 512_000, 1_048_576, 5_242_880, 10_485_760]
+        ]
+      ),
 
       # VM metrics (automatically collected by telemetry_poller)
       Telemetry.Metrics.last_value("vm.memory.total",
@@ -146,42 +146,23 @@ defmodule JobService.Metrics do
 
   Called periodically by telemetry_poller (every 5 seconds).
   Uses :cpu_sup from :os_mon to get CPU utilization across all cores.
+
+  Note: The first call returns CPU utilization since system boot (garbage value).
+  Subsequent calls return utilization since the last call, which is accurate.
+  Returns 0 if cpu_sup is not available.
   """
   def measure_cpu_utilization do
-    try do
-      # Get CPU utilization: returns list of {CPU, Busy, NonBusy, Misc}
-      # or a single {all, Busy, NonBusy, Misc} tuple for overall utilization
-      case :cpu_sup.util() do
-        {:all, busy, _non_busy, _misc} ->
-          # Busy is already a percentage (0-100)
-          :telemetry.execute(
-            [:job_svc, :cpu],
-            %{utilization: busy},
-            %{}
-          )
+    case :cpu_sup.util() do
+      utilization when is_number(utilization) ->
+        # CPU utilization as percentage (0-100)
+        :telemetry.execute(
+          [:job_svc, :cpu],
+          %{utilization: utilization},
+          %{}
+        )
 
-        cpu_list when is_list(cpu_list) ->
-          # Calculate average across all CPUs
-          total_busy =
-            Enum.reduce(cpu_list, 0, fn {_cpu, busy, _non_busy, _misc}, acc ->
-              acc + busy
-            end)
-
-          avg_busy = total_busy / length(cpu_list)
-
-          :telemetry.execute(
-            [:job_svc, :cpu],
-            %{utilization: avg_busy},
-            %{}
-          )
-
-        _other ->
-          # If cpu_sup is not available or returns unexpected format, do nothing
-          :ok
-      end
-    rescue
-      _ ->
-        # If :cpu_sup is not available, silently skip
+      {:error, _reason} ->
+        # cpu_sup error occurred, skip silently
         :ok
     end
   end

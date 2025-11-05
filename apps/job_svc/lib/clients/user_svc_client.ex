@@ -17,10 +17,10 @@ defmodule Clients.UserSvcClient do
   - `email_response_binary`: Encoded EmailResponse protobuf
 
   ## Returns
-  - `{:ok, response}` on success
+  - `{:ok, :notified}` on success
   - `{:error, reason}` on failure
   """
-  @spec notify_email_sent(binary()) :: :ok | {:error, any()}
+  @spec notify_email_sent(binary()) :: {:ok, :notified} | {:error, any()}
   def notify_email_sent(email_response_binary) do
     Logger.info("[UserSvcClient] Notifying user_svc of email delivery")
 
@@ -39,11 +39,11 @@ defmodule Clients.UserSvcClient do
            headers: [{"content-type", "application/protobuf"}],
            receive_timeout: 10_000
          ) do
-      {:ok, %{status: 204}} ->
+      {:ok, %Req.Response{status: 204}} ->
         Logger.info("[UserSvcClient] Notification sent successfully")
         {:ok, :notified}
 
-      {:ok, %{status: status, body: body}} ->
+      {:ok, %Req.Response{status: status, body: body}} ->
         Logger.error("[UserSvcClient] Unexpected status #{status}: #{inspect(body)}")
         {:error, "HTTP #{status}"}
 

@@ -48,31 +48,6 @@ defmodule UserSvc.Metrics do
         reporter_options: [buckets: [10, 50, 100, 250, 500, 1000, 2500, 5000, 10_000]]
       ),
 
-      # Image conversion metrics
-      # Telemetry.Metrics.counter("image_svc.conversion.count",
-      #   tags: [:status],
-      #   description: "Total number of image conversions"
-      # ),
-      # Telemetry.Metrics.distribution("image_svc.conversion.duration",
-      #   unit: {:native, :millisecond},
-      #   description: "Job conversion duration",
-      #   reporter_options: [buckets: [100, 500, 1000, 2000, 5000, 10_000, 30_000]]
-      # ),
-      # Telemetry.Metrics.distribution("image_svc.conversion.input_size",
-      #   unit: :byte,
-      #   description: "Input image size in bytes",
-      #   reporter_options: [
-      #     buckets: [1024, 10_240, 102_400, 512_000, 1_048_576, 5_242_880, 10_485_760]
-      #   ]
-      # ),
-      # Telemetry.Metrics.distribution("image_svc.conversion.output_size",
-      #   unit: :byte,
-      #   description: "Output PDF size in bytes",
-      #   reporter_options: [
-      #     buckets: [1024, 10_240, 102_400, 512_000, 1_048_576, 5_242_880, 10_485_760]
-      #   ]
-      # ),
-
       # VM metrics (automatically collected by telemetry_poller)
       Telemetry.Metrics.last_value("vm.memory.total",
         unit: :byte,

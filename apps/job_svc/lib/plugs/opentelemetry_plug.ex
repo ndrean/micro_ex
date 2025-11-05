@@ -11,6 +11,7 @@ defmodule JobSvc.OpenTelemetryPlug do
 
   def init(opts), do: opts
 
+  @spec call(Plug.Conn.t(), list()) :: Plug.Conn.t()
   def call(conn, _opts) do
     # Extract trace context from incoming headers (traceparent, tracestate)
     # conn.req_headers is already a list of {key, value} tuples

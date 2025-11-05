@@ -135,42 +135,23 @@ defmodule ImageSvc.Metrics do
 
   Called periodically by telemetry_poller (every 5 seconds).
   Uses :cpu_sup from :os_mon to get CPU utilization across all cores.
+
+  Note: The first call returns CPU utilization since system boot (garbage value).
+  Subsequent calls return utilization since the last call, which is accurate.
+  Returns 0 if cpu_sup is not available.
   """
   def measure_cpu_utilization do
-    try do
-      # Get CPU utilization: returns list of {CPU, Busy, NonBusy, Misc}
-      # or a single {all, Busy, NonBusy, Misc} tuple for overall utilization
-      case :cpu_sup.util() do
-        {:all, busy, _non_busy, _misc} ->
-          # Busy is already a percentage (0-100)
-          :telemetry.execute(
-            [:image_svc, :cpu],
-            %{utilization: busy},
-            %{}
-          )
+    case :cpu_sup.util() do
+      utilization when is_number(utilization) ->
+        # CPU utilization as percentage (0-100)
+        :telemetry.execute(
+          [:image_svc, :cpu],
+          %{utilization: utilization},
+          %{}
+        )
 
-        cpu_list when is_list(cpu_list) ->
-          # Calculate average across all CPUs
-          total_busy =
-            Enum.reduce(cpu_list, 0, fn {_cpu, busy, _non_busy, _misc}, acc ->
-              acc + busy
-            end)
-
-          avg_busy = total_busy / length(cpu_list)
-
-          :telemetry.execute(
-            [:image_svc, :cpu],
-            %{utilization: avg_busy},
-            %{}
-          )
-
-        _other ->
-          # If cpu_sup is not available or returns unexpected format, do nothing
-          :ok
-      end
-    rescue
-      _ ->
-        # If :cpu_sup is not available, silently skip
+      {:error, _reason} ->
+        # cpu_sup error occurred, skip silently
         :ok
     end
   end
