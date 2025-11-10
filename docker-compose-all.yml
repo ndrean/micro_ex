@@ -2,7 +2,7 @@ services:
   # User Service
   user_svc:
     build:
-      context: .  # Build from monorepo root to access libs/
+      context: . # Build from monorepo root to access libs/
       dockerfile: apps/user_svc/Dockerfile
       args:
         OS: ${OS}
@@ -19,7 +19,7 @@ services:
         - action: rebuild
           path: ./apps/user_svc/mix.exs
         - action: rebuild
-          path: ./libs/protos  # Rebuild when protos change
+          path: ./libs/protos # Rebuild when protos change
 
     env_file:
       - .env.staging
@@ -49,7 +49,7 @@ services:
   # Client Service
   client_svc:
     build:
-      context: .  # Build from monorepo root to access libs/
+      context: . # Build from monorepo root to access libs/
       dockerfile: apps/client_svc/Dockerfile
       args:
         OS: ${OS}
@@ -66,7 +66,7 @@ services:
         - action: rebuild
           path: ./apps/client_svc/mix.exs
         - action: rebuild
-          path: ./libs/protos  # Rebuild when protos change
+          path: ./libs/protos # Rebuild when protos change
 
     env_file:
       - .env.staging
@@ -103,7 +103,7 @@ services:
   # Job Service
   job_svc:
     build:
-      context: .  # Build from monorepo root to access libs/
+      context: . # Build from monorepo root to access libs/
       dockerfile: apps/job_svc/Dockerfile
       args:
         OS: ${OS}
@@ -120,7 +120,7 @@ services:
         - action: rebuild
           path: ./apps/job_svc/mix.exs
         - action: rebuild
-          path: ./libs/protos  # Rebuild when protos change
+          path: ./libs/protos # Rebuild when protos change
 
     env_file:
       - .env.staging
@@ -156,7 +156,7 @@ services:
   # Image Service
   image_svc:
     build:
-      context: .  # Build from monorepo root to access libs/
+      context: . # Build from monorepo root to access libs/
       dockerfile: apps/image_svc/Dockerfile
       args:
         OS: ${OS}
@@ -173,7 +173,7 @@ services:
         - action: rebuild
           path: ./apps/image_svc/mix.exs
         - action: rebuild
-          path: ./libs/protos  # Rebuild when protos change
+          path: ./libs/protos # Rebuild when protos change
 
     env_file:
       - .env.staging
@@ -204,7 +204,7 @@ services:
   # Email Service
   email_svc:
     build:
-      context: .  # Build from monorepo root to access libs/
+      context: . # Build from monorepo root to access libs/
       dockerfile: apps/email_svc/Dockerfile
       args:
         OS: ${OS}
@@ -221,7 +221,7 @@ services:
         - action: rebuild
           path: ./apps/email_svc/mix.exs
         - action: rebuild
-          path: ./libs/protos  # Rebuild when protos change
+          path: ./libs/protos # Rebuild when protos change
 
     env_file:
       - .env.staging
@@ -392,22 +392,6 @@ services:
       timeout: 10s
       retries: 3
 
-  # Redoc - API Documentation Viewer (clean, modern UI)
-  redoc:
-    image: redocly/redoc:latest
-    container_name: msvc-redoc
-    ports:
-      - ${REDOC_PORT}:80
-    env_file:
-      - .env.staging
-    volumes:
-      - ./openapi:/usr/share/nginx/html/specs:ro
-    healthcheck:
-      test: [ "CMD", "wget", "--spider", "-q", "http://127.0.0.1:80" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
   # Swagger UI - Interactive API Documentation (for testing)
   swagger-ui:
     image: swaggerapi/swagger-ui:latest
@@ -420,11 +404,13 @@ services:
       # Service-specific configuration
       URLS: >
         [
+          { url: "specs/client_svc.yaml", name: "Client Serrvice (${CLIENT_SVC_PORT})"},
           { url: "specs/user_svc.yaml", name: "User Service (${USER_SVC_PORT})" },
           { url: "specs/job_svc.yaml", name: "Job Service (${JOB_SVC_PORT})" },
-          { url: "specs/image_svc.yaml", name: "Image Service (${IMAGE_SVC_PORT})" }
+          { url: "specs/image_svc.yaml", name: "Image Service (${IMAGE_SVC_PORT})" },
+          { url: "specs/email_svc.yaml", name: "Email Service (${EMAIL_SVC_PORT})" }
         ]
-      URLS_PRIMARY_NAME: "User Service (${USER_SVC_PORT})"
+      URLS_PRIMARY_NAME: "Client Service (${CLIENT_SVC_PORT})"
     volumes:
       - ./openapi:/usr/share/nginx/html/specs:ro
     healthcheck:

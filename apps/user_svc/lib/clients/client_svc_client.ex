@@ -8,8 +8,6 @@ defmodule Clients.ClientSvcClient do
   require Logger
 
   # Runtime config - reads from runtime.exs via environment variables
-  defp base_url, do: Application.get_env(:user_svc, :client_svc_base_url)
-  defp endpoints, do: Application.get_env(:user_svc, :client_svc_endpoints)
   defp client_svc_base_url, do: Application.get_env(:user_svc, :client_svc_base_url)
   defp client_svc_endpoints, do: Application.get_env(:user_svc, :client_svc_endpoints)
 
@@ -77,7 +75,7 @@ defmodule Clients.ClientSvcClient do
   def push_notification(message) do
     Logger.info("[User][ClientSvcClient] Forwarding email notification")
 
-    case post(base_url(), endpoints().receive_notification, message) do
+    case post(client_svc_base_url(), client_svc_endpoints().receive_notification, message) do
       {:ok, %{status: 204}} ->
         Logger.info("[User][ClientSvcClient] Notification forwarded successfully")
         :ok

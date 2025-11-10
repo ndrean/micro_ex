@@ -31,15 +31,10 @@ The main interest of this demo is the orchestration of all the observability too
 
 ## Services Overview
 
-<img src="priv/architecture.png" >
-
-<details>
-<summary>Architecture</summary>
-
 ```mermaid
 architecture-beta
     group api(cloud)[API]
-    group logs(cloud)[LOGS]
+    group logs(cloud)[O11Y]
     service client(internet)[Client_4000] in api
     service s3(disk)[S3_9000 MinIO] in api
     service user(server)[User_8081 service] in api
@@ -49,10 +44,11 @@ architecture-beta
     service image(disk)[Image_8083 service] in api
     
     service loki(cloud)[Loki_3100 aggregator] in logs
-    service promtail(disk)[Promtail_9080 pushes] in logs
-    service jaeger(cloud)[Jaeger_4318 traces] in logs
-    service sdtout(cloud)[SDTOUT DaemonSet] in logs
-    service s3-logs(disk)[S3_9000 MinIO] in logs
+    service promtail(disk)[Promtail_9080 logs] in logs
+    service jaeger(cloud)[Jaeger_4317 traces] in logs
+    service sdtout(cloud)[SDTOUT OTEL] in logs
+    service graf(cloud)[Grafana] in logs
+    service promex(cloud)[PromEx Metrics] in logs
 
 
     client:R -- L:user
@@ -60,17 +56,20 @@ architecture-beta
     job:B -- T:user
     email:R -- L:job
     image:B -- T:job
+    image:R -- T:s3
     db:L -- R:job
     user:R -- L:s3
 
+    sdtout:T -- B:promex
+    promex:R -- T:graf
     sdtout:R --> L:jaeger
+    jaeger:R -- T:graf
+    loki:R -- L:graf
     sdtout:B --> T:promtail
     loki:L <-- R:promtail
-    loki:B -- T:s3-logs
+
     
 ```
-
-</details>
 
 ### Client service
 
@@ -79,7 +78,6 @@ architecture-beta
   - triggers User creation with concurrent streaming
   - triggers PNG conversion of PNG images
   - Receives final workflow callbacks
-- **Endpoints**: `/client_svc/receive_email_notification`
 
 ### User service
 
@@ -89,11 +87,6 @@ architecture-beta
   - Image conversion workflow orchestration
   - Image storage with presigned URLs
   - Completion callback relay to clients
-- **Endpoints**:
-  - `/user_svc/create_user`
-  - `/user_svc/convert_image`
-  - `/user_svc/image_loader/:storage_id`
-  - `/user_svc/conversion_complete`
 
 ### Job service
 
@@ -103,10 +96,6 @@ architecture-beta
   - Email worker for welcome emails
   - Image conversion worker
   - Job retry logic and monitoring
-- **Endpoints**:
-  - `/job_svc/send_email`
-  - `/job_svc/convert_image`
-  - `/job_svc/email_notification`
 
 ### Email service
 
@@ -115,63 +104,27 @@ architecture-beta
   - Swoosh email delivery
   - Email templates (welcome, notification, conversion complete)
   - Delivery callbacks
-- **Endpoints**: `/email_svc/deliver_email`
 
 ### Image service
 
-- **Purpose**: Image conversion service
+- **Purpose**: Image conversion  service
 - **Key Features**:
-  - PNG/JPEG to PDF conversion using ImageMagick
-  - Quality settings (low/medium/high/lossless)
-  - Metadata stripping and image resizing
-  - URL-based image fetching
-- **Endpoints**: `/image_svc/convert_image`
-
-We build two workflows as detailed below.
+  - PNG>PDF conversion using ImageMagick
+  - S3 storage of converted image
 
 ### Workflow example: Email Notification
 
-```mermaid
-sequenceDiagram
-    Client->>+User: send <event> <br> - email notification <br> - convert PNG>PDF
-    User ->>+MinIO: event: <image> <br>store in Cloud
-    User->>+ObanJob: dispatch event to Job <br> (email or image)
-    ObanJob ->> ObanJob: enqueue a Job <br> trigger async Worker
-    ObanJob-->>+Email: Email_Worker
-    Email -->>Client: email sent
-    ObanJob-->>+Image: Image_Worker
-    Image <<-->>MinIO: retrieve initial Image
-    Image -->>Image: convert
-    Image <<-->>MinIO: store in Cloud
-    Image -->>Client: image converted & ready
-```
-
 This workflow demonstrates async email notifications using Oban and Swoosh.
 
-<img src="priv/email-sequence.png">
-
-**Service Chain**: `client_svc` → `user_svc` → `job_svc` → `email_svc`
-
-**Detailed Flow**:
-
-1. **Client** → `user_svc/CreateUser` (protobuf: UserRequest)
-2. **user_svc**:
-   - Receives user data
-   - Validates and processes user information
-3. **user_svc** → `job_svc/SendEmail` (protobuf: EmailRequest)
-   - Sends email job request with user details
-4. **job_svc**:
-   - Enqueues Oban job (EmailWorker)
-   - Returns immediately (async from here)
-   - Worker picks up job from SQLite queue
-5. **EmailWorker** → `email_svc/deliver_email` (protobuf: EmailRequest)
-6. **email_svc**:
-   - Generates email from template (welcome, notification, etc.)
-   - Sends via Swoosh mailer
-7. **email_svc** → `job_svc/email_notification` (callback: EmailResponse)
-   - Confirms delivery status
-8. **job_svc** → `user_svc/conversion_complete` (optional: notify completion)
-9. **user_svc** → `client_svc/receive_notification` (final callback)
+```mermaid
+sequenceDiagram
+    Client->>+User: event <br> send email
+    User->>+ObanJob: dispatch event
+    ObanJob ->> ObanJob: enqueue Job <br> trigger async Worker
+    ObanJob-->>+Email: do email job
+    Email -->>Email: send email
+    Email -->>Client: email sent
+```
 
 **Key Features**:
 
@@ -186,39 +139,18 @@ This workflow demonstrates efficient binary data handling using the "Pull Model"
 
 - **Pull Model & Presigned URLs**: Image service fetches data on-demand via temporary URLs (using AWS S3 pattern)
 
-<img src="priv/image-sequence.png">
-
-**Detailed Flow**:
-
-1. Client → POST to `user_svc/ConvertImage` (protobuf with image_data binary)
-   - Only binary transfer to user service
-2. user_svc:
-   - Stores image in S3
-   - Generates storage*id: `"job*#{UUID}"`
-   - Creates presigned URL: `http://user_svc:8081/user_svc/image_loader/v1/{storage_id}`
-   - Returns immediate acknowledgment to client
-3. user_svc → POST to `job_svc/convert_image` (protobuf with image_url)
-4. job_svc:
-   - Enqueues Oban job (ImageConversionWorker) with image_url
-   - Returns immediately (async from here)
-   - Worker picks up job from SQLite queue
-5. ImageConversionWorker → `image_svc/convert_image` (protobuf with image_url)
-   - Passes URL reference and conversion options
-6. image_svc → GET `user_svc/image_loader/{storage_id}`
-   - Fetches the image binary on-demand (1st binary transfer)
-   - Enables retry logic if fetch fails
-7. image_svc:
-   - Converts PNG → PDF using `ImageMagick`
-   - Applies quality settings, resizing, metadata stripping
-   - Measures processing metrics
-8. image_svc → Returns PDF binary in response (2nd binary transfer)
-9. job_svc → `email_svc/DeliverEmail` (sends completion notification)
-10. email_svc → Sends "conversion complete" email to user
-11. job_svc → `user_svc/ConversionComplete` (notifies completion)
-12. user_svc:
-    - Cleans up stored image from memory
-    - Relays completion to client
-13. user_svc → `client_svc/ReceiveNotification` (final callback with result)
+```mermaid
+sequenceDiagram
+    Client->>+User: event <br><image:binary>
+    User -->>User: create presigned-URL<br> S3 storage
+    User->>+ObanJob: event <br><convert:URL>
+    ObanJob ->> ObanJob: enqueue a Job <br> trigger async Worker
+    ObanJob-->>+Image: do convert
+    Image -->>Image: convert<br>S3 Storage<br>new presigned-URL
+    Image -->>Job: URL converted
+    Job ->>User: URL converted
+    User ->>Client: URL converted
+```
 
 ### API Design and Documentation
 
@@ -296,15 +228,11 @@ See [openapi/README.md](openapi/README.md) for detailed documentation setup and 
 
 ### Viewing Documentation
 
-We used `Swagger` and `Redoc` to generate online documentation of the APIs.
+We used `Swagger` on port 8087 and `Redoc` on port 8086 to generate online documentation of the APIs.
 
-**Interactive Documentation**:
+Both are running in containers.
 
-| Tool             | URL                                      | Best For                                      |
-| ---------------- | ---------------------------------------- | --------------------------------------------- |
-| **Redoc**        | http://localhost:8080                    | Beautiful reading experience, onboarding      |
-| **Swagger UI**   | http://localhost:8085                    | Interactive API testing ("Try it out" button) |
-| **Landing Page** | [openapi/index.html](openapi/index.html) | Quick links to all services & observability   |
+We have a bind mount to the _/open_api_ folder.
 
 **Swagger UI Service Selector**:
 

@@ -69,7 +69,7 @@ defmodule DeliveryController do
         |> EmailService.Mailer.deliver()
 
       "notification" ->
-        EmailService.Emails.UserEmail.notification_email(
+        Emails.UserEmail.notification_email(
           email,
           name,
           "new notification",

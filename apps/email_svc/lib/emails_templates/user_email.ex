@@ -1,4 +1,4 @@
-defmodule EmailService.Emails.UserEmail do
+defmodule Emails.UserEmail do
   import Swoosh.Email
 
   @moduledoc """

@@ -8,9 +8,9 @@ defmodule JobService.Clients.EmailSvcClient do
   require Logger
 
   defp base_email_url, do: Application.get_env(:job_svc, :email_svc_base_url)
-  defp base_job_url, do: Application.get_env(:job_svc, :job_svc_base_url)
+  defp base_user_url, do: Application.get_env(:job_svc, :user_svc_base_url)
   defp email_svc_endpoint, do: Application.get_env(:job_svc, :email_svc_endpoints)
-  defp job_svc_endpoints, do: Application.get_env(:job_svc, :job_svc_endpoints)
+  defp user_svc_endpoints, do: Application.get_env(:job_svc, :user_svc_endpoints)
 
   @doc """
   Sends an email request to email_svc.
@@ -37,39 +37,42 @@ defmodule JobService.Clients.EmailSvcClient do
 
     case post(base_email_url(), email_svc_endpoint().send_email, request_binary) do
       {:ok, %{status: 200, body: response_binary}} ->
-        # Notify job_svc about email delivery
-        notify_email_delivery(response_binary)
+        # Notify user_svc about email delivery directly
+        notify_user_svc(response_binary)
         :ok
 
       {:ok, %{status: status}} ->
         Logger.error("[Job][EmailSvcClient] HTTP #{status}")
-        notify_email_delivery_failure()
+        notify_user_svc_failure()
         {:error, "[Job] HTTP #{status}"}
 
       {:error, reason} ->
         Logger.error("[Job][EmailSvcClient] Request failed: #{inspect(reason)}")
-        notify_email_delivery_failure()
+        notify_user_svc_failure()
         {:error, reason}
     end
   end
 
   # Private helpers
 
-  @spec notify_email_delivery(binary()) :: :ok | {:error, any()}
-  defp notify_email_delivery(response_body) do
-    # Post back to job_svc's callback endpoint
-    post(base_job_url(), job_svc_endpoints().notify_email_delivery, response_body)
+  @spec notify_user_svc(binary()) :: :ok | {:error, any()}
+  defp notify_user_svc(response_body) do
+    # Post directly to user_svc (no intermediate hop through job_svc)
+    Logger.info("[Job][EmailSvcClient] Notifying user_svc of email delivery")
+    post(base_user_url(), user_svc_endpoints().notify_email_sent, response_body)
   end
 
-  defp notify_email_delivery_failure do
+  defp notify_user_svc_failure do
     failure_response =
       %Mcsv.EmailResponse{
-        message: "[Job] Failed to send",
+        user_id: "",
+        email: "",
+        message: "[Job] Failed to send email",
         success: false
       }
       |> Mcsv.EmailResponse.encode()
 
-    post(base_job_url(), job_svc_endpoints().notify_email_delivery, failure_response)
+    post(base_user_url(), user_svc_endpoints().notify_email_sent, failure_response)
   end
 
   @spec post(binary(), binary(), binary(), list()) :: {:ok, any()} | {:error, any()}

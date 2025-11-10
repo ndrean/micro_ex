@@ -11,10 +11,10 @@ defmodule ClientServiceWeb.Endpoint do
   # Phoenix telemetry (emits events for OpenTelemetry)
   plug(Plug.Telemetry, event_prefix: [:phoenix, :endpoint])
 
-  # Parse JSON, but pass protobuf through unchanged
+  # Parse JSON, but pass protobuf and text/plain through unchanged
   plug(Plug.Parsers,
     parsers: [:json],
-    pass: ["application/protobuf", "application/x-protobuf"],
+    pass: ["application/protobuf", "application/x-protobuf", "text/plain"],
     json_decoder: Jason
   )
 
