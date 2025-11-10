@@ -1,6 +1,6 @@
 # Discover Microservices with Elixir with Observability
 
-This is a tiny demo of **Phoenix/Elixir-based microservices** demonstrating PNG-to-PDF image conversion with email notifications.
+This is a demo of **Phoenix-Elixir-based microservices** demonstrating PNG-to-PDF image conversion with email notifications.
 
 The idea of this demo is to use:
 
@@ -11,7 +11,7 @@ The idea of this demo is to use:
 The system still uses quite a few technologies.
 
 - Protocol buffers for inter-service communication serialization with a compiled package-like installation
-- `Oban` for background job processing backed with the database `SQLite`
+- background job processing (`Oban`) backed with the database `SQLite`
 - `Swoosh` for email delivery
 - `ImageMagick` for image conversion
 - `MinIO` for S3 compatible local-cloud storage
@@ -20,55 +20,74 @@ The system still uses quite a few technologies.
 - `Prometheus` for metrics
 - `Grafana` for global dashboards and `PromEx` for helping to setup `Grafana` dashboards
 
+It is designed [API-first ➡ Code] as this aappears to be the best way to build APIs.
 
-It is designed [API-first ➡ Code] as this is the easiest way to build contracts between services and design the proto files accordingly.
+You used OpenAPI which includes _schemas_ which expose the protocol buffer contracts.
 
-In turn, the proto contracts provides strong type safety. They are rather easy to design (_as long as you don't use the full gRPC methods and transport protocol_) and enforces the contract-first approach.
+The proto contracts provide strong type safety. They are rather easy to design (_as long as you don't use the full gRPC methods and transport protocol_) and enforces the contract-first approach.
 
 Routes follow a `Twirp`-like RPC DSL, with a format `/service_name/method_name` instead of traditional REST (`/resource`).
 
-The main interest of this demo is the orchestration of all the observability tools with OpenTelemetry in `Elixir`.
+The main interest of this demo is to display a broad range of tools and orchestrate the observability tools with OpenTelemetry in `Elixir`.
+
+## Prerequisites
+
+This project uses **containers** heavily.
+
+Ensure you have the following installed on your system:
+
+- **Protocol Buffers Compiler** (`protoc`) - [Installation guide](https://grpc.io/docs/protoc-installation/)
+- **ImageMagick** - Required for PNG/JPEG to PDF conversion
+
+The **Docker setup**:
+
+- Setup the `watch` in _docker-compose.yml_ (rebuilds on code change)
+
+```yml
+develop:
+      watch:
+        - action: rebuild
+          path: ./apps/client_svc/lib
+        - action: rebuild
+          path: ./apps/client_svc/mix.exs
+```
+
+- Run the _watch_ mode:
+
+```sh
+docker compose up --watch
+```
+
+- Execute Elixir commands on the _client_service_ container:
+
+```sh
+docker exec -it msvc-client-svc bin/client_svc remote
+
+# Interactive Elixir (1.19.2) - press Ctrl+C to exit (type h() ENTER for help)
+
+# iex(client_svc@ba41c71bacac)1> ImageClient.convert_png("my-image.png", "me@com")
+```
 
 ## Services Overview
 
 ```mermaid
 architecture-beta
     group api(cloud)[API]
-    group logs(cloud)[O11Y]
-    service client(internet)[Client_4000] in api
-    service s3(disk)[S3_9000 MinIO] in api
-    service user(server)[User_8081 service] in api
-    service job(server)[Oban_8082 service] in api
-    service db(database)[DB_5432] in api
-    service email(internet)[SMTP_8084 service] in api
-    service image(disk)[Image_8083 service] in api
-    
-    service loki(cloud)[Loki_3100 aggregator] in logs
-    service promtail(disk)[Promtail_9080 logs] in logs
-    service jaeger(cloud)[Jaeger_4317 traces] in logs
-    service sdtout(cloud)[SDTOUT OTEL] in logs
-    service graf(cloud)[Grafana] in logs
-    service promex(cloud)[PromEx Metrics] in logs
-
+    service client(internet)[Client] in api
+    service s3(disk)[S3 MinIO] in api
+    service user(server)[User] in api
+    service job(server)[Job] in api
+    service db(database)[DB SQLite] in api
+    service email(internet)[SMTP] in api
+    service image(disk)[Image] in api
 
     client:R -- L:user
-    job:R -- L:s3
+    image:R --> L:s3
     job:B -- T:user
     email:R -- L:job
     image:B -- T:job
-    image:R -- T:s3
     db:L -- R:job
     user:R -- L:s3
-
-    sdtout:T -- B:promex
-    promex:R -- T:graf
-    sdtout:R --> L:jaeger
-    jaeger:R -- T:graf
-    loki:R -- L:graf
-    sdtout:B --> T:promtail
-    loki:L <-- R:promtail
-
-    
 ```
 
 ### Client service
@@ -228,11 +247,11 @@ See [openapi/README.md](openapi/README.md) for detailed documentation setup and 
 
 ### Viewing Documentation
 
-We used `Swagger` on port 8087 and `Redoc` on port 8086 to generate online documentation of the APIs.
-
-Both are running in containers.
+We used a `SwaggerUI` container on port 8087 to generate online documentation of the APIs.
 
 We have a bind mount to the _/open_api_ folder.
+
+<img scr="priv/openapi-email-svc.png" alt="openapi-email">
 
 **Swagger UI Service Selector**:
 
@@ -253,7 +272,7 @@ http://localhost:8080?url=specs/email_svc.yaml
 http://localhost:8080?url=specs/image_svc.yaml
 ```
 
-## Observability O11Y
+## Observability
 
 Now that we have our workflows, we want to add observability.
 
@@ -263,6 +282,25 @@ Firtly a quote:
 
 We will only scratch the surface of observability.
 
+```mermaid
+architecture-beta
+  group logs(cloud)[O11Y]
+    service loki(cloud)[Loki_3100 aggregator] in logs
+    service promtail(disk)[Promtail_9080 logs] in logs
+    service jaeger(cloud)[Jaeger_4317 traces] in logs
+    service sdtout(cloud)[SDTOUT OTEL] in logs
+    service graf(cloud)[Grafana] in logs
+    service promex(cloud)[PromEx Metrics] in logs
+
+    sdtout:T --> B:promex
+    promex:R -- T:graf
+    sdtout:R --> L:jaeger
+    jaeger:R -- T:graf
+    loki:R -- L:graf
+    sdtout:B --> T:promtail
+    loki:L <-- R:promtail
+```
+
 ### Stack Overview
 
 The big picture:
@@ -271,28 +309,30 @@ The big picture:
 ---
 title: Services
 ---
-    flowchart TD
-        subgraph SVC[microservices]
-            MS[All microservices<br>---<br> stdout]
-            MSOT[microservice<br>OpenTelemetry]
-        end
-        subgraph OBS[observability]
-            MS-->|HTTP stream| Promtail
-            Promtail -->|:3100| Loki
-            Loki -->|:3100| Grafana
-            Loki <-.->|:9000| MinIO
-            Jaeger -->|:16686| Grafana
-            Grafana -->|:3000| Browser
-            MinIO -->|:9001| Browser
-            MSOT -->|gRPC:4317| Jaeger
-        end
-        subgraph DOC[OpenAPI Documentation]
-            Swagger --> |:8080| UI
-            Swagger <-->|test| MS
-            Redoc
-            MS --> Redoc
-            Redoc --> |:80| UI
-        end
+  flowchart TD
+      subgraph SVC[microservices]
+          MS[All microservices<br>---<br> stdout]
+          MSOTEM[microservice<br>OpenTelemetry]
+      end
+      subgraph OBS[observability]
+          MS-->|HTTP stream| Promtail
+          Promtail -->|:3100| Loki
+          Loki -->|:3100| Grafana
+          Loki <-.->|:9000| MinIO
+          Jaeger -->|:16686| Grafana
+          Grafana -->|:3000| Browser
+          MinIO -->|:9001| Browser
+          MSOTEM -->|gRPC:4317| Jaeger
+      end
+```
+
+```mermaid
+---
+title: Documentation
+--- 
+
+  flowchart LR
+    Swagger --> |:8087| UI
 ```
 
 The tools pictured above are designed to be used in a **container** context.
@@ -327,91 +367,17 @@ Some explanations about **who does what?**:
   "Where did this request fail?"
   "What's the call graph?"
 
-| System            | Model                  | Format                 | Storage                      |
-| ----------------- | ---------------------- | ---------------------- | ---------------------------- |
-| Prometheus        | PULL (scrape)          | Plain text             | Disk (TS-DB)                 |
-|                   | GET /metrics Every 15s | key=value              | prometheus-data              |
-| Loki via Promtail | PUSH  Batched          | JSON (logs) structured | MinIO (S3) loki-chunks       |
-| Jaeger            | PUSH OTLP              | Protobuf (spans)   │   | Memory only! Lost on restart |
-| Grafana           | N/A (UI)               | N/A                    | SQLite   (dashboards only)   |
-
-### Observables flow between Services
-
-<img src="priv/process_architecture.png" >
-
-<details>
-<summary>Containers</summary>
-
-```mermaid
----
-title: Services
----
-    flowchart TD
-        subgraph SVC[microservices]
-            MS[All microservices<br>---<br> stdout]
-            MSOT[microservice<br>OpenTelemetry]
-        end
-        MS-->|stream| Promtail
-        Promtail -->|:3100| Loki
-        Loki -->|:3100| Grafana
-        Loki <-.->|:9000| MinIO
-        Jaeger -->|:16686| Grafana
-        Grafana -->|:3000| Browser
-        MinIO -->|:9001| Browser
-        MSOT -->|:4318| Jaeger
-```
-
-</details>
-
-### Logs pipeline
-
-<img src="priv/log-pipeline.png">
-
-<details>
-<summary>Logs pipeline</summary>
-
-```mermaid
-flowchart TB
-    subgraph Services[Microservices]
-        U[User Svc<br>--<br>Logger.info]
-        W[Job Svc<br><br>--<br>Logger.info]
-        E[Email Svc<br><br>--<br>Logger.info]
-        I[Image Svc<br><br>--<br>Logger.info]
-    end
-
-    subgraph Logs[Logs Pipeline]
-        O(stdout<br>Plain text or JSON)
-        PromSt[PROMTAIL:9080<br>JSON parsing<br>buffer<br>labels extraction]
-        L[LOKI:3100<br>in-memory chunks<br>build index]
-        S3[(S3 - MinIO<br>loki-chunks bucket)]
-    end
-
-    subgraph Monitor[Monitoring Access]
-        M[Prometheus/curl<br>GET :9080<br>/metrics<br>/targets<br>/ready <br> <br> GET :3100 <br> /loki/api/v1/query_range]
-    end
-
-    U --> O
-    W --> O
-    E --> O
-    I --> O
-    O o--o|stream via<br>Docker socket <br> or <br> K8 DaemonSet| PromSt
-    PromSt -->|batch ~1s<br>POST:3100<br>JSON + gzip| L
-    L -->|flush every ~10min<br>chunks + index| S3
-    S3 -.->|read for<br>old queries| L
-    M -.->|query API <br> :9080| PromSt
-    M-.->|query API <br> :3100| L
-
-    Grafana[GRAFANA<br> GET:3100 <br>/loki/api/v1/query_range] -->|GET| L
-```
-
-</details>
+| System            | Model                                       | Format                 | Storage                                        |
+| ----------------- | ------------------------------------------- | ---------------------- | ---------------------------------------------- |
+| Prometheus        | PULL (scrape)                               | Plain text             | Disk (TimeSerieDB)                             |
+|                   | GET /metrics Every 15s                      | key=value              | prometheus-data                                |
+| Loki via Promtail | PUSH  Batched                               | JSON (logs) structured | MinIO (S3) loki-chunks                         |
+| Jaeger (or Tempo) | PUSH OTLP                                   | Protobuf (spans)   │   | - Jaeger: memory only <br> - Tempo: S3 storage |
+| Grafana           | UI only, connected to Loki / Jaeger / Tempo | -                      | SQLite   (dashboards only)                     |
 
 ### Trace pipeline
 
-<img src="priv/trace-pipeline.png">
-
-<details>
-<summary>CTrace pipeline</summary>
+In dev mode, `Jaeger` offers a UI frontend (whilst not `Tempo`).
 
 ```mermaid
 ---
@@ -419,12 +385,8 @@ title: Application Services and Trace pipeline
 --- 
 
 flowchart TD
-    subgraph Traces[Trace Producers]
+    subgraph Traces[Each Service is a Trace Producer]
         UE[User Svc<br> --- <br> OpenTelemetry SDK<br>buffer structured spans]
-        WE[Job Svc<br> --- <br>OpenTelemetry SDK<br>buffer structured spans]
-        EE[Email Svc<br>--- <br> OpenTelemetry SDK<br>buffer structured spans]
-        IE[Image Svc<br> --- <br>OpenTelemetry SDK<br>buffer structured spans]
-        
     end
 
     subgraph Cons[Traces consumer]
@@ -436,19 +398,16 @@ flowchart TD
         UI[Browser]
     end
 
-    WE -->|batch ~5s <br> POST:4318<br> protobuf|J
-    EE -->|batch ~5s<br>POST:4318<br> protobuf|J
     UE -->|batch ~5s<br>POST:4318<br> protobuf|J
-    IE -->|batch ~5s<br>POST:4318<br> protobuf|J
 
     G[GRAFANA<br>] -->|GET:16686<br>/api/traces|J
     UI-->|:3000| G
     UI-->|:16686|J
 ```
 
-</details>
+> If you run  locally with Docker, you can use the Docker daemon and use a `loki` driver to read and push the logs from stdout (in the docker socket) to Loki.
 
-If you run  locally with Docker, you can use the Docker daemon and use a `loki` driver to read and push the logs from stdout (in the docker socket) to Loki. We used instead `Promtail` to consume the logs and push them to Loki. This solution is more K8 ready.
+> We used instead `Promtail` to consume the logs and push them to Loki. This solution is more K8 ready.
 
 > To use a local `loki` driver, we need to isntall it:
 
@@ -456,93 +415,18 @@ If you run  locally with Docker, you can use the Docker daemon and use a `loki` 
 docker plugin install grafana/loki-docker-driver:latest --alias loki --grant-all-permissions
 ```
 
-## Prerequisites
-
-This project uses **containers** heavily.
-
-Ensure you have the following installed on your system:
-
-- **Protocol Buffers Compiler** (`protoc`) - [Installation guide](https://grpc.io/docs/protoc-installation/)
-- **ImageMagick** - Required for PNG/JPEG to PDF conversion
-
-  ```bash
-  # macOS
-  brew install imagemagick
-
-  # Ubuntu/Debian
-  sudo apt-get install imagemagick
-
-  # Verify installation
-  magick --version
-  ```
-
-- **SQLite3** - For Oban job queue (usually pre-installed on most systems)
-
-A **Quick Setup**
-
-```sh
-# 1. Start MinIO (S3-compatible storage)
-./setup_minio.sh
-
-# 2. Test MinIO connection
-elixir test_storage_simple.exs
-
-# 3. Install dependencies for each service
-cd user_svc && mix deps.get
-cd ../job_svc && mix deps.get
-# ... repeat for other services
-
-# 4. Generate protobuf files from /protos (single source of truth)
-# Note: protoc creates the protos/ subdirectory automatically
-for svc in user_svc job_svc email_svc image_svc client_svc; do
-  protoc --elixir_out=./$svc/lib/ --proto_path=. protos/*.proto
-done
-```
-
-See [MINIO_SETUP.md](MINIO_SETUP.md) for detailed MinIO configuration and troubleshooting.
-
-The **Docker setup**:
-
-- Setup the `watch` in _docker-compose.yml_ (rebuilds on code change)
-
-```yml
-develop:
-      watch:
-        - action: rebuild
-          path: ./apps/client_svc/lib
-        - action: rebuild
-          path: ./apps/client_svc/mix.exs
-```
-
-- Run the _watch_ mode:
-
-```sh
-docker compose up --watch
-```
-
-- Execute Elixir commands on the _client_service_ container:
-
-```sh
-docker exec -it msvc-client-svc bin/client_svc remote
-
-# Interactive Elixir (1.19.2) - press Ctrl+C to exit (type h() ENTER for help)
-# iex(client_svc@ba41c71bacac)1> ImageClient.convert_png("my-image.png", "me@com")
-```
-
 ## Protobuf
-
-The messages are exchanged in _binary_ form, as opposed to standard plain JSON text.
 
 Why `protobuf`?
 
 - **Type Safety**: Defines a contract on the data being exchanged
 - **Efficiency**: Better compression and serialization speed compared to JSON
 - **Simple API**: Mainly 2 methods: `encode` and `decode`
-- **Human Readable**: Decoded messages are human readable for debugging
 
-The main reason of using this format is for _type safety_ here, not for speed (favor `messagepack`) nor for lowering message size (as opposed to JSON text).
+The messages are exchanged in _binary_ form, as opposed to standard plain JSON text, but the decoded messages are in JSON form!
 
-The proto files clearly _document_ the contract between services.
+The main reason of using this format is for _type safety_; the proto files clearly _document_ the contract between services.
+It is not for speed (favor `messagepack`) nor for lowering message size (as opposed to JSON text).
 
 **Example protobuf schema** (`email.proto`):
 
@@ -568,11 +452,9 @@ message EmailResponse {
 
 ### Protobuf in Practice: Encode/Decode Pattern
 
-We use a **Twirp-like RPC DSL** instead of traditional REST.
+We use a **Twirp-like RPC DSL** instead of traditional REST. The routes are named after the service method (e.g., `/email_svc/SendEmail`) rather than REST resources (e.g., `/emails`).
 
-Routes are named after the service method (e.g., `/email_svc/SendEmail`) rather than REST resources (e.g., `/emails`).
-
-**Router Setup** ([email_svc/lib/router.ex:15](email_svc/lib/router.ex#L15)):
+**Example** ([email_svc/lib/router.ex:15](email_svc/lib/router.ex#L15)):
 
 ```elixir
 post "/email_svc/SendEmail" do
@@ -660,21 +542,12 @@ This project uses a **centralized proto library** (`libs/protos`) that automatic
 - `protoc` compiler installed ([installation guide](https://grpc.io/docs/protoc-installation/))
 - For local development: `mix escript.install hex protobuf` (adds `protoc-gen-elixir` to PATH)
 
-**Proto File Distribution**:
-
-- `user.proto` → user_svc, job_svc, image_svc, client_svc
-- `image.proto` → user_svc, job_svc, image_svc, client_svc
-- `email.proto` → job_svc, email_svc
-- `job.proto` → job_svc
-
-**Design Pattern**:
-
-1. **Single source of truth**: All `.proto` files live in `libs/protos/proto_defs/`
-2. **Custom Mix compiler**: Automatically compiles protos during `mix deps.get`
-3. **Path dependency**: Services include `{:protos, path: "../../libs/protos"}` in mix.exs
-4. **No manual copying**: Compiled `*.pb.ex` files are generated once and reused
-
 **How it works**:
+
+In the folder _libs/protos_, we have the list of our proto files, `*.proto`.
+We run a task to compile them in place to produce `*.pb.ex` files.
+
+The files will be embeded into the Beam code just like any package, thus available.
 
 ```elixir
 # libs/protos/mix.exs
@@ -688,6 +561,22 @@ def project do
   ]
 end
 
+defp deps do
+  [
+    {:protobuf, "~> 0.15.0"}
+  ]
+end
+
+def Mix.Tasks.Compile.ProtoComiler do
+  [...]
+  System.cmd("protoc", args)
+  [...]
+end
+```
+
+In the services, declare the "package":
+
+```elixir
 # apps/client_svc/mix.exs
 defp deps do
   [
@@ -698,6 +587,8 @@ end
 ```
 
 **Container implementation** (applies to all service Dockerfiles):
+
+You need to bring in `protobuf-dev`, copy the _libs/proto_ folder, run the install script, define the PATH (as described in the [Elixir protobuf documentation](https://github.com/elixir-protobuf/protobuf#generate-elixir-code))
 
 ```dockerfile
 # 1. Install protoc system package
@@ -717,12 +608,18 @@ ENV PATH="/root/.mix/escripts:${PATH}"
 RUN mix compile
 ```
 
-**Benefits**:
+**Key points**:
 
-- DRY: Update `.proto` files in one place
-- Type safety: All services use identical message definitions
-- Build automation: No manual `protoc` commands
-- Container-ready: Works in both dev and Docker environments
+1. **Single source of truth**: The `.proto` files live in `libs/protos/proto_defs/`
+2. **Custom Mix compiler**: Automatically compiles protos during `mix deps.get`
+3. **Path dependency**: Services include `{:protos, path: "../../libs/protos"}` in mix.exs
+4. **No manual copying**: Compiled `*.pb.ex` files are generated once and reused
+5. Build automation: No manual `protoc` commands
+6. Container-ready: Works in both dev and Docker environments
+
+**Post from Andrea Leopardi about sharing protobuf across services**
+
+[<img src="priv/ALeopardi-share-protobuf.png" with="300">](https://andrealeopardi.com/posts/sharing-protobuf-schemas-across-services/)
 
 ## OpenTelemetry
 
@@ -769,115 +666,35 @@ Req.post(
 ) 
 ```
 
-## [TODO] Move this somewhere! Misc tips & tricks
-
-The usage of RPC-style endpoints (not RESTful API with dynamic segments) makes observability easier (no `:id` in static paths).
-
-Tracing: headers are injected to follow the trace: `_otel_trace_context`
-
-Prometheus via `:promex`. We named "prometheus" the datasource name in the onfiguration file _prometheus.yml_  under the key `:uid`.
-
-```sh
-mix prom_ex.gen.config --datasource prometheus
-
-mix prom_ex.dashboard.export --dashboard application.json --module UserSvc.PromEx --file_path ../../grafana/dashboards/user_svc_application.json
-
-for service in job_svc image_svc email_svc client_svc; do
-  cd apps/$service
-  mix prom_ex.dashboard.export --dashboard application.json --module "$(echo $service | sed 's/_\([a-z]\)/\U\1/g' | sed 's/^./\U&/').PromEx" --stdout > ../../grafana/dashboards/${service}_application.json
-  mix prom_ex.dashboard.export --dashboard beam.json --module "$(echo $service | sed 's/_\([a-z]\)/\U\1/g' | sed 's/^./\U&/').PromEx" --stdout > ../../grafana/dashboards/${service}_beam.json
-  cd ../..
-done
-```
-
-- protobuf: set `pass: ["application/protobuf"]` in the Plug.Parsers in the module _router.ex_ .
-- follow trace async/Oban worker: add "_otel_trace_context" to your Oban job args
-- PromEx datasource: use the value in datasource.name (and uid) for /grafana/provisioning/datasources/datasources.yml, and in /prom_ex.ex/ dashboard_assigns()[:datasource]
-- generate the standard Promex dshboards.
-- respect Grafana folder structure: _grafana/provisioning/{datasources,dashboards,plugins,notifiers}_.
-
-## Testing
-
-- unit tests
-- contract tests
-- integration tests
-- load tests
-- chaos tests
-  
-Connect to the "msvc-client-svc" container and get an IEX session to run commands:
-
-```sh
-docker exec -it msvc-client-svc bin/client_svc remote
-
-iex(client_svc@b6d94600b7e3)4> 
-   Enum.to_list(1..1000) 
-   |> Task.async_stream(fn i -> Client.create(i) end, max_concurrency: 10, ordered: false) 
-   |> Stream.run
-
-
-iex(client_svc@b6d94600b7e3)5>
-   List.duplicate("lib/client_svc-0.1.0/priv/test.png", 100) 
-   |> Task.async_stream(
-         fn file -> ImageClient.convert_png(file, "m@com") 
-      end)
-   |> Stream.run()
-
-iex(client_svc@b6d94600b7e3)6> Stream.interate(50) |> Task.async_stream(fn _ -> Client.create(1) end, max_concurrenccy: 10, orderede: false) |> Stream.run()
-# :ok
-```
-
-
 ## COCOMO Complexity Analysis of this project
 
-Tool: <https://github.com/boyter/scc>
+Curious? ⏯️ <https://en.wikipedia.org/wiki/COCOMO>
 
-───────────────────────────────────────────────────────────────────────────────
-Language            Files       Lines    Blanks  Comments       Code Complexity
-───────────────────────────────────────────────────────────────────────────────
-Elixir                103       7,097     1,066       901      5,130        267
-JSON                   10      14,875         7         0     14,868          0
-YAML                   10       1,386       104        78      1,204          0
-Markdown                8       1,177       302         0        875          0
-Docker ignore           5         204        47        54        103          0
-Dockerfile              5         345        86        92        167         16
-Protocol Buffe…         5         310        50        86        174          0
-Shell                   3         128        23        17         88          3
-HTML                    1         412        33         0        379          0
-───────────────────────────────────────────────────────────────────────────────
-Total                 150      25,934     1,718     1,228     22,988        286
-───────────────────────────────────────────────────────────────────────────────
-Estimated Cost to Develop (organic) $726,392
-Estimated Schedule Effort (organic) 12.18 months
-Estimated People Required (organic) 5.30
-───────────────────────────────────────────────────────────────────────────────
-Processed 683366 bytes, 0.683 megabytes (SI)
-───────────────────────────────────────────────────────────────────────────────
+Implementation: <https://github.com/boyter/scc>
+
+> The OpenAPISpecs are "just" YAML but take even more time than Protocol Buffers files to write, but take 0 complexity!?
+
+| Language        | Files | Lines  | Blanks | Comments | Code   | Complexity |
+| --------------- | ----- | ------ | ------ | -------- | ------ | ---------- |
+| Elixir          | 130   | 8,271  | 1,212  | 1,170    | 5,889  | 300        |
+| YAML            | 13    | 2,148  | 160    | 76       | 1,912  | 0          |
+| JSON            | 10    | 14,847 | 6      | 0        | 14,841 | 0          |
+| Markdown        | 10    | 2,293  | 551    | 0        | 1,742  | 0          |
+| Docker ignore   | 6     | 209    | 48     | 54       | 107    | 0          |
+| Dockerfile      | 5     | 453    | 112    | 114      | 227    | 17         |
+| Protocol Buffe… | 5     | 251    | 45     | 25       | 181    | 0          |
+| HTML            | 1     | 412    | 33     | 0        | 379    | 0          |
+| Makefile        | 1     | 77     | 11     | 11       | 55     | 4          |
+| Shell           | 1     | 41     | 7      | 6        | 28     | 0          |
+| Total           | 182   | 29,002 | 2,185  | 1,456    | 25,361 | 321        |
+
+Estimated Cost to Develop (organic) $805,322
+
+Estimated Schedule Effort (organic) 12.67 months
+
+Estimated People Required (organic) 5.65
 
 ## Production Considerations
-
-### Container Count Breakdown
-
-**Application Containers** (5+):
-
-- client_svc, user_svc, job_svc, email_svc, image_svc
-
-**Infrastructure** (1-2):
-
-- Storage: MinIO (S3-compatible storage)
-- RDBMS (embeded serverless SQLite here, but Postgres server in production)
-
-**Observability** (6):
-
-- Prometheus (metrics scraper + TSDB)
-- Loki (log aggregator)
-- Promtail (log shipper - would be K8s DaemonSet in prod)
-- Jaeger (trace collector)
-- Grafana (visualization UI)
-- Swagger UI / Redoc (API documentation viewers)
-
-**Total**: 12 containers (in production, observability would serve 100s of services)
-
----
 
 **Observability scales horizontally, not per-service**:
 
@@ -922,24 +739,7 @@ Total                  = 28GB (~10% overhead)
   - **Note**: Requires `otlp_protocol` config update (already implemented in `user_svc`, replicate for other services)
   - **Why not UDP for traces?** Traces are critical for debugging; losing spans = incomplete request flows
 
-## TODOS
-
-- **Implement OpenApiSpex for all services**?
-
-- **Auto-generate OpenAPI YAML from specs**:
-  
-```elixir
-# Add to each service router
-get "/openapi.yaml" do
-   spec = MyService.ApiSpec.spec()
-   yaml = OpenApiSpex.OpenApi.to_yaml(spec)
-   send_resp(conn, 200, yaml)
-end
-```
-
-- **Replace manual YAML with runtime-generated specs**:
-  - Fetch from `/openapi.yaml` endpoint instead of static files
-  - Single source of truth (code = documentation)
+## TODOS?
 
 - Observability Enhancements
 
@@ -956,11 +756,7 @@ end
     - Sample 10% of successful requests
     - Keep 100% of errors/warnings
 
-### Architecture Improvements
-
-- **OTLP protocol configuration** for all services:
-  - `user_svc` - Runtime protocol selection implemented
-  - `job_svc`, `image_svc`, `email_svc`, `client_svc` - Copy pattern from user_svc
+### Possible architecture Improvements
 
 - **Service mesh** (Istio/Linkerd):
   - Automatic mTLS between services
@@ -968,7 +764,7 @@ end
   - Traffic splitting for canary deployments
 
 - **Event sourcing** for job_svc:
-  - Replace Oban state transitions with event log
+  - Replace Oban state transitions with event sourcing: RabbitMQ
   - Better audit trail and replay capability
   - See explanation below ⬇️
 
@@ -986,6 +782,28 @@ end
    - Test multiple modules working together
    - May use real database (SQLite in your case)
    - Example: Test Oban job enqueuing → worker execution → email delivery
+
+Connect to the "msvc-client-svc" container and get an IEX session to run commands:
+
+```sh
+docker exec -it msvc-client-svc bin/client_svc remote
+
+iex(client_svc@b6d94600b7e3)4> 
+   Enum.to_list(1..1000) 
+   |> Task.async_stream(fn i -> Client.create(i) end, max_concurrency: 10, ordered: false) 
+   |> Stream.run
+
+
+iex(client_svc@b6d94600b7e3)5>
+   List.duplicate("lib/client_svc-0.1.0/priv/test.png", 100) 
+   |> Task.async_stream(
+         fn file -> ImageClient.convert_png(file, "m@com") 
+      end)
+   |> Stream.run()
+
+iex(client_svc@b6d94600b7e3)6> Stream.interate(50) |> Task.async_stream(fn _ -> Client.create(1) end, max_concurrenccy: 10, orderede: false) |> Stream.run()
+# :ok
+```
 
 4. **Contract Tests** (Service boundaries):
    - Verify Protobuf message compatibility between services
@@ -1012,109 +830,32 @@ end
      - Corrupt Protobuf messages (test validation)
    - **Goal**: Discover weaknesses before they cause outages
 
-## Event Sourcing vs Oban (Architectural Pattern)
+## [TODO] Move this somewhere! Misc tips & tricks
 
-Oban is a State-based Jo queue.
-Event Sourcing can be considered if the following questions arise:
+The usage of RPC-style endpoints (not RESTful API with dynamic segments) makes observability easier (no `:id` in static paths).
 
-- "Why did this job fail 3 times before succeeding?"
-- "Replay all image conversions that failed due to MinIO timeout"
-- "Show me jobs cancelled by user X in the last 30 days"
+Tracing: headers are injected to follow the trace: `_otel_trace_context`
 
-### Current: Oban (State-Based Job Queue)
+Prometheus via `:promex`. We named "prometheus" the datasource name in the onfiguration file _prometheus.yml_  under the key `:uid`.
 
-```elixir
-# Oban stores CURRENT STATE in SQLite
-jobs table:
-id | state      | worker           | args
-1  | completed  | EmailWorker      | %{user_id: 123}
-2  | executing  | ImageWorker      | %{job_id: 456}
-3  | failed     | ImageWorker      | %{job_id: 789}
+```sh
+mix prom_ex.gen.config --datasource prometheus
 
-# You know WHERE the job is NOW, but not HOW it got there
-# Lost information: retries, who cancelled, why it failed, etc.
+mix prom_ex.dashboard.export --dashboard application.json --module UserSvc.PromEx --file_path ../../grafana/dashboards/user_svc_application.json
+
+for service in job_svc image_svc email_svc client_svc; do
+  cd apps/$service
+  mix prom_ex.dashboard.export --dashboard application.json --module "$(echo $service | sed 's/_\([a-z]\)/\U\1/g' | sed 's/^./\U&/').PromEx" --stdout > ../../grafana/dashboards/${service}_application.json
+  mix prom_ex.dashboard.export --dashboard beam.json --module "$(echo $service | sed 's/_\([a-z]\)/\U\1/g' | sed 's/^./\U&/').PromEx" --stdout > ../../grafana/dashboards/${service}_beam.json
+  cd ../..
+done
 ```
 
-**Pros**:
-
-- Simple to understand and use
-- Built-in retry logic
-- Low storage overhead (one row per job)
-- Fast queries (index on `state`)
-
-**Cons**:
-
-- No audit trail (can't answer "who cancelled this job?")
-- Can't replay history (can't reprocess from step 2)
-- Hard to debug (lost intermediate states)
-
----
-
-### Alternative: Event Sourcing
-
-```elixir
-# Instead of storing CURRENT state, store ALL EVENTS
-events table:
-id | job_id | event_type        | data                      | timestamp
-1  | 456    | job_created       | %{user_id: 123}           | 2025-11-05 10:00:00
-2  | 456    | job_enqueued      | %{queue: "default"}       | 2025-11-05 10:00:01
-3  | 456    | job_started       | %{worker_pid: #PID<...>}  | 2025-11-05 10:00:05
-4  | 456    | conversion_failed | %{error: "timeout"}       | 2025-11-05 10:01:00
-5  | 456    | job_retried       | %{attempt: 2}             | 2025-11-05 10:02:00
-6  | 456    | job_completed     | %{pdf_url: "s3://..."}    | 2025-11-05 10:02:30
-
-# Current state = reduce(events)
-# State at any time = reduce(events up to timestamp)
-```
-
-**Pros**:
-
-- Complete audit trail: "Who did what, when, and why?"
-- Time travel: Replay events to see state at any point
-- Debuggability: See exact sequence of events leading to failure
-- Event-driven architecture: Other services can subscribe to events
-- Analytics: Answer business questions ("How many jobs fail on first attempt?")
-
-**Cons**:
-
-- Complexity: More code to write (event handlers, reducers)
-- Storage overhead: 10x more rows (one per event vs one per job)
-- Query complexity: Must reduce events to get current state
-- Learning curve: Requires mental shift from CRUD to events
-
----
-
-### Example: Job Retry with Event Sourcing
-
-```elixir
-# Traditional Oban (state update)
-def handle_failure(job) do
-  # Lost info: what was the error? how many times retried?
-  Oban.update(job, %{state: "failed", attempts: job.attempts + 1})
-end
-
-# Event Sourcing (append events)
-def handle_failure(job, error) do
-  EventStore.append([
-    %JobEvent{type: :job_failed, job_id: job.id, data: %{
-      error: error,
-      attempt: job.attempts,
-      worker_pid: self(),
-      timestamp: DateTime.utc_now()
-    }},
-    %JobEvent{type: :job_retried, job_id: job.id, data: %{
-      next_attempt_at: DateTime.add(DateTime.utc_now(), 60, :second),
-      retry_reason: "automatic_retry_policy"
-    }}
-  ])
-end
-
-# "Show me all jobs that failed due to timeout on their 3rd attempt"
-EventStore.query(
-  event_type: :job_failed,
-  data: %{error: "timeout", attempt: 3}
-)
-```
+- protobuf: set `pass: ["application/protobuf"]` in the Plug.Parsers in the module _router.ex_ .
+- follow trace async/Oban worker: add "_otel_trace_context" to your Oban job args
+- PromEx datasource: use the value in datasource.name (and uid) for /grafana/provisioning/datasources/datasources.yml, and in /prom_ex.ex/ dashboard_assigns()[:datasource]
+- generate the standard Promex dshboards.
+- respect Grafana folder structure: _grafana/provisioning/{datasources,dashboards,plugins,notifiers}_.
 
 Testing ImageMagick in container: create a PNG image 100x100 filled with red and pipe into te command.
 
