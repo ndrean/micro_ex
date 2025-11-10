@@ -171,106 +171,29 @@ sequenceDiagram
     User ->>Client: URL converted
 ```
 
-### API Design and Documentation
+## OpenAPI Documentation
 
-You receive a ticket to implement an API.
-You start by defining the OpenAPISpecs.
+You receive a ticket to implement an API. You start by defining the OpenAPISpecs.
 
-### OpenAPI Specifications
+The OpenAPI specs document the HTTP interface and schemas (contracts).
 
-All services provide OpenAPI 3.0 specifications for their HTTP endpoints.
-
-While the services communicate internally via **Protobuf binary serialization** (`application/x-protobuf`), the OpenAPI specs document the HTTP interface and contract.
 The protobuf contract will implement these specs.
 
 The manual YAML specs are:
 
-- 📘 **[user_svc.yaml](openapi/user_svc.yaml)** - User orchestration service (port 8081)
-- 📗 **[job_svc.yaml](openapi/job_svc.yaml)** - Oban job queue service (port 8082)  
-- 📙 **[email_svc.yaml](openapi/email_svc.yaml)** - Email delivery service (port 8083)
-- 📕 **[image_svc.yaml](openapi/image_svc.yaml)** - Image processing service (port 8084)
+- [client_svc.ymal](openapi/client_svc.yaml) -- Client entrypoint (port 8085)
+- [user_svc.yaml](openapi/user_svc.yaml) - User Gateway service (port 8081)
+- [job_svc.yaml](openapi/job_svc.yaml) - Oban job queue service (port 8082)  
+- [email_svc.yaml](openapi/email_svc.yaml) - Email delivery service (port 8083)
+- [image_svc.yaml](openapi/image_svc.yaml) - Image processing service (port 8084)
 
-### OpenApiSpex Implementation
+We expose the documentation via a `SwaggerUI` container (port 8087).
 
-You have the option to enforce runtime checks. The **OpenApiSpex** runtime spec generation is documented for one service only, `image_svc`.
+The container has a bind mount to the _/open_api_ folder.
 
-The type safety of the protobuf serialization covers and the integration tests cover however most of the endpoints.
-
-| Service    | OpenApiSpex Runtime | Manual YAML |
-| ---------- | :-----------------: | :---------: |
-| client_svc |        ❌ No         |    ✅ Yes    |
-| user_svc   |        ❌ No         |    ✅ Yes    |
-| job_svc    |        ❌ No         |    ✅ Yes    |
-| image_svc  |        ✅ Yes        |    ✅ Yes    |
-| email_svc  |        ❌ No         |    ✅ Yes    |
-
-**image_svc Implementation** (reference example):
-
-```elixir
-# lib/api_spec.ex - OpenAPI spec definition
-defmodule ImageSvc.ApiSpec do
-  alias OpenApiSpex.{Info, OpenApi, Server}
-  
-  def spec do
-    %OpenApi{
-      info: %Info{
-        title: "Image Service API",
-        version: "1.0.0"
-      },
-      servers: [%Server{url: "http://localhost:8084"}],
-      paths: Paths.from_router(ImageSvc.Router)
-    }
-  end
-end
-
-# lib/router.ex - Serve spec at /openapi
-plug(OpenApiSpex.Plug.PutApiSpec, module: ImageSvc.ApiSpec)
-
-get "/openapi" do
-  conn
-  |> put_resp_content_type("application/json")
-  |> send_resp(200, Jason.encode!(ImageSvc.ApiSpec.spec()))
-end
-
-# lib/conversion_controller.ex - Document endpoint
-use OpenApiSpex.ControllerSpecs
-
-operation :convert,
-  summary: "Convert image to PDF",
-  request_body: {"Image conversion request", "application/x-protobuf", ImageConversionRequestSchema},
-  responses: [
-    ok: {"Conversion successful", "application/x-protobuf", ImageConversionResponseSchema}
-  ]
-```
-
-See [openapi/README.md](openapi/README.md) for detailed documentation setup and usage.
-
-### Viewing Documentation
-
-We used a `SwaggerUI` container on port 8087 to generate online documentation of the APIs.
-
-We have a bind mount to the _/open_api_ folder.
+An example:
 
 <img scr="priv/openapi-email-svc.png" alt="openapi-email">
-
-**Swagger UI Service Selector**:
-
-```txt
-http://localhost:8085
-├── User Service (8081)    ← Dropdown selector
-├── Job Service (8082)
-├── Email Service (8083)
-└── Image Service (8084)
-```
-
-**Redoc Direct Links** (specify YAML via query param):
-
-```txt
-http://localhost:8080?url=specs/user_svc.yaml
-http://localhost:8080?url=specs/job_svc.yaml
-http://localhost:8080?url=specs/email_svc.yaml
-http://localhost:8080?url=specs/image_svc.yaml
-```
 
 ## Observability
 
