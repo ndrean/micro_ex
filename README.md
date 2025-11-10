@@ -181,11 +181,11 @@ The protobuf contract will implement these specs.
 
 The manual YAML specs are:
 
-- [client_svc.ymal](https://github.com/ndrean/micro_ex/openapi/client_svc.yaml) -- Client entrypoint (port 8085)
-- [user_svc.yaml](https://github.com/ndrean/micro_ex/openapi/user_svc.yaml) - User Gateway service (port 8081)
-- [job_svc.yaml](https://github.com/ndrean/micro_ex/openapi/job_svc.yaml) - Oban job queue service (port 8082)  
-- [email_svc.yaml](https://github.com/ndrean/micro_ex/openapi/email_svc.yaml) - Email delivery service (port 8083)
-- [image_svc.yaml](https://github.com/ndrean/micro_ex/openapi/image_svc.yaml) - Image processing service (port 8084)
+- [client_svc.ymal](https://github.com/ndrean/micro_ex/blob/main/)openapi/client_svc.yaml) -- Client entrypoint (port 8085)
+- [user_svc.yaml]([https://github.com/ndrean/micro_ex/blob/main/)openapi/user_svc.yaml) - User Gateway service (port 8081)
+- [job_svc.yaml](https://github.com/ndrean/micro_ex/blob/main/openapi/job_svc.yaml) - Oban job queue service (port 8082)  
+- [email_svc.yaml](https://github.com/ndrean/micro_ex/blob/main/openapi/email_svc.yaml) - Email delivery service (port 8083)
+- [image_svc.yaml](https://github.com/ndrean/micro_ex/blob/main/openapi/image_svc.yaml) - Image processing service (port 8084)
 
 We expose the documentation via a `SwaggerUI` container (port 8087).
 
@@ -193,7 +193,7 @@ The container has a bind mount to the _/open_api_ folder.
 
 An example:
 
-<img scr="https://github.com/ndrean/micro_ex/priv/openapi-email-svc.png" alt="openapi-email">
+<img scr="https://github.com/ndrean/micro_ex/blob/main/priv/openapi-email-svc.png" alt="openapi-email">
 
 ## Observability
 
@@ -542,7 +542,7 @@ RUN mix compile
 
 **Post from Andrea Leopardi about sharing protobuf across services**
 
-[<img src="priv/ALeopardi-share-protobuf.png" with="300">](https://andrealeopardi.com/posts/sharing-protobuf-schemas-across-services/)
+[<img src="https://github.com/ndrean/micro_ex/blob/main/priv/ALeopardi-share-protobuf.png" with="300">](https://andrealeopardi.com/posts/sharing-protobuf-schemas-across-services/)
 
 ## OpenTelemetry
 
