@@ -86,7 +86,7 @@ defmodule ImageSvc.ConversionCache do
   Cleanup old records (older than 7 days).
   Call this periodically via Oban scheduled job.
   """
-  def cleanup_old_records(days_ago \\ 7) do
+  def cleanup_old_records(days_ago \\ 1) do
     ConversionCacheServer.cleanup_old_records(days_ago)
   end
 end

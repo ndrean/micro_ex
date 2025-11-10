@@ -16,22 +16,30 @@ config :job_svc,
   pool_size: 5
 
 # Configure Oban (repo connection is in runtime.exs)---------------------------------
+# Memory optimization notes:
+# - Lower concurrency reduces worker memory overhead (~5-10MB per worker)
+# - Higher poll_interval reduces CPU/DB polling overhead
+# - Fewer plugins = less background work
+# - Image conversions are CPU-bound, so fewer workers with longer queues is fine
 config :job_svc, Oban,
   repo: JobService.Repo,
   engine: Oban.Engines.Lite,
-  log: :debug,
+  # Changed from :debug to reduce log memory
+  log: :info,
   queues: [
-    default: 10,
-    emails: 10,
-    images: System.schedulers_online()
+    # Reduced from 10 (most jobs are just HTTP calls)
+    default: 2,
+    # Reduced from 10 (emails are fast, 3 is plenty)
+    emails: 3,
+    # Half of CPU cores
+    images: max(2, div(System.schedulers_online(), 2))
   ],
-  poll_interval: 100,
+  # Reduced from 100ms (less aggressive polling)
+  poll_interval: 500,
   shutdown_grace_period: 30_000,
   plugins: [
-    # Clean old jobs
-    # {Oban.Plugins.Pruner, max_age: 3600},
-    # Stage jobs faster
-    # {Oban.Plugins.Stager, interval: 1000},
+    # Clean old jobs (keep this for DB maintenance)
+    {Oban.Plugins.Pruner, max_age: 600},
     # Cron plugin for scheduled jobs
     {Oban.Plugins.Cron,
      crontab: [

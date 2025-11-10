@@ -46,6 +46,7 @@ defmodule JobSvc.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
+      {:protos, path: "../../libs/protos"},
       {:phoenix, "~> 1.8"},
       {:bandit, "~> 1.8"},
       {:req, "~> 0.5.15"},

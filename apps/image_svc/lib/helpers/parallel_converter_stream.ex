@@ -26,16 +26,17 @@ defmodule ImageSvc.ParallelConverterStream do
   """
   def convert_to_pdf(image_binary, opts \\ []) when is_binary(image_binary) do
     quality = Keyword.get(opts, :quality, "medium")
+    input_format = Keyword.get(opts, :input_format, "png")
     threads = Keyword.get(opts, :threads, System.schedulers_online())
 
     Logger.info(
-      "[ParallelConverterStream] Converting #{byte_size(image_binary)} bytes (quality: #{quality}, threads: #{threads})"
+      "[ParallelConverterStream] Converting #{byte_size(image_binary)} bytes (format: #{input_format}, quality: #{quality}, threads: #{threads})"
     )
 
     start_time = System.monotonic_time(:millisecond)
 
     # Build ImageMagick args for stdin -> stdout conversion
-    args = build_streaming_args(quality, threads)
+    args = build_streaming_args(input_format, quality, threads)
 
     # Create stream of binary chunks using Stream.unfold (proven to work in console)
     chunk_size = 65_536
@@ -53,9 +54,14 @@ defmodule ImageSvc.ParallelConverterStream do
           {rest, <<>>}
       end)
 
+    # Log the full command for debugging
+    full_cmd = ["magick" | args]
+    Logger.info("[ParallelConverterStream] Running: #{Enum.join(full_cmd, " ")}")
+
     try do
+      # Stream without stderr capture first - simpler
       pdf_binary =
-        ExCmd.stream!(["magick" | args], input: input_stream)
+        ExCmd.stream!(full_cmd, input: input_stream)
         |> Enum.reduce(<<>>, fn chunk, acc -> acc <> chunk end)
 
       duration = System.monotonic_time(:millisecond) - start_time
@@ -78,22 +84,27 @@ defmodule ImageSvc.ParallelConverterStream do
           "[ParallelConverterStream] ImageMagick failed with exit code #{e.exit_status}: #{Exception.message(e)}"
         )
 
+        Logger.error("[ParallelConverterStream] Command was: #{Enum.join(full_cmd, " ")}")
+
         {:error, {:conversion_failed, e.exit_status, Exception.message(e)}}
 
       e ->
         Logger.error("[ParallelConverterStream] Unexpected error: #{Exception.message(e)}")
+        Logger.error("[ParallelConverterStream] Error: #{inspect(e)}")
         {:error, {:unexpected_error, Exception.message(e)}}
     end
   end
 
   ## Private Functions
 
-  # Build args for streaming: stdin (-) -> stdout (pdf:-)
-  defp build_streaming_args(quality, threads) do
+  # Build args for streaming: stdin (format:-) -> stdout (pdf:-)
+  defp build_streaming_args(input_format, quality, threads) do
     System.put_env("MAGICK_THREAD_LIMIT", to_string(threads))
 
     base_args = [
-      "fd:0",
+      # Specify input format explicitly when reading from stdin
+      # e.g., "png:-" tells ImageMagick to read PNG from stdin
+      "#{input_format}:-",
       "-limit",
       "thread",
       to_string(threads)

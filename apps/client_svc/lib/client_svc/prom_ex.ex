@@ -87,8 +87,8 @@ defmodule ClientService.PromEx do
     [
       # PromEx built in Grafana dashboards
       {:prom_ex, "application.json"},
-      {:prom_ex, "beam.json"}
-      # {:prom_ex, "phoenix.json"},
+      {:prom_ex, "beam.json"},
+      {:prom_ex, "phoenix.json"}
       # {:prom_ex, "ecto.json"},
       # {:prom_ex, "oban.json"},
       # {:prom_ex, "phoenix_live_view.json"},

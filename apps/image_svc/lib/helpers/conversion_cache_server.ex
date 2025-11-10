@@ -14,8 +14,6 @@ defmodule ImageSvc.ConversionCacheServer do
   use GenServer
   require Logger
 
-  @db_path Application.compile_env(:image_svc, :conversion_cache_db, "db/conversion_cache.db")
-
   ## Client API
 
   def start_link(opts \\ []) do
@@ -69,7 +67,9 @@ defmodule ImageSvc.ConversionCacheServer do
 
   @impl true
   def init(_opts) do
-    with {:ok, conn} <- Exqlite.Sqlite3.open(@db_path),
+    db_path = ImageService.Repo.config()[:database]
+
+    with {:ok, conn} <- Exqlite.Sqlite3.open(db_path),
          :ok <- Exqlite.Sqlite3.execute(conn, "PRAGMA busy_timeout = 5000"),
          :ok <- Exqlite.Sqlite3.execute(conn, "PRAGMA journal_mode = WAL"),
          :ok <- Exqlite.Sqlite3.execute(conn, "PRAGMA synchronous = NORMAL") do

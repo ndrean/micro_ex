@@ -1,18 +1,20 @@
-# Multi-stage Dockerfile for job_svc
+# Multi-stage Dockerfile for job_svc (Monorepo)
+# Build context MUST be the repo root: docker build -f apps/job_svc/Dockerfile .
 # Stage 1: Build the release
 ARG PORT=8082
+ARG OS=alpine:3.22.2
 ARG ELIXIR_IMAGE=hexpm/elixir:1.19.2-erlang-28.1-alpine-3.22.2
 FROM ${ELIXIR_IMAGE} AS builder
 
-# Service port (12-factor: configurable at build and runtime)
 ARG PORT
 ENV PORT=${PORT}
 
-# Install build dependencies
+# Install build dependencies + protoc for proto compilation
 RUN apk add --no-cache \
     build-base \
     git \
-    openssl-dev
+    openssl-dev \
+    protobuf-dev
 
 # Set working directory
 WORKDIR /app
@@ -21,27 +23,37 @@ WORKDIR /app
 RUN mix local.hex --force && \
     mix local.rebar --force
 
-# Copy dependency files first (for better caching)
-COPY mix.exs mix.lock ./
-COPY config/config.exs config/
+# Copy shared protos library first (for better caching)
+COPY libs/protos libs/protos/
 
-# Install dependencies
+# Copy job_svc dependency files
+COPY apps/job_svc/mix.exs apps/job_svc/mix.lock apps/job_svc/
+COPY apps/job_svc/config/config.exs apps/job_svc/config/prod.exs apps/job_svc/config/
+
+# Set working directory to job_svc
+WORKDIR /app/apps/job_svc
+
+# Install dependencies (will compile protos lib automatically)
 ENV MIX_ENV=prod
 RUN mix deps.get --only prod
 
-# Copy application code
-COPY lib ./lib
-COPY priv ./priv
-COPY config/runtime.exs config/
+# Install protoc-gen-elixir escript (required for proto compilation)
+RUN mix escript.install --force hex protobuf
+ENV PATH="/root/.mix/escripts:${PATH}"
 
-# Compile application
+# Copy application code
+COPY apps/job_svc/lib ./lib
+COPY apps/job_svc/priv ./priv
+COPY apps/job_svc/config/runtime.exs config/
+
+# Compile application (protos will be compiled as dependency)
 RUN mix compile
 
 # Build release
 RUN mix release
 
 # Stage 2: Create minimal runtime image
-FROM alpine:3.22.2 AS app
+FROM ${OS} AS app
 
 ARG PORT
 ENV PORT=${PORT}
@@ -60,8 +72,8 @@ RUN addgroup -g 1000 appuser && \
 
 WORKDIR /app
 
-# Copy release from builder
-COPY --from=builder --chown=appuser:appuser /app/_build/prod/rel/job_svc ./
+# Copy release from builder (built in /app/apps/job_svc)
+COPY --from=builder --chown=appuser:appuser /app/apps/job_svc/_build/prod/rel/job_svc ./
 
 # Create database directory with proper permissions
 RUN mkdir -p /app/db && chown -R appuser:appuser /app/db

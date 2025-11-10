@@ -37,7 +37,7 @@ defmodule ConversionController do
 
     **Workflow:**
     1. Fetches image from provided URL
-    2. Converts to PDF using ImageMagick
+    2. Converts to PDF using ImageMagick (multi-threaded)
     3. Stores PDF in MinIO via user_svc
     4. Returns acknowledgment with image metadata
 
@@ -55,7 +55,7 @@ defmodule ConversionController do
   def convert(conn, _) do
     with {:ok, request, new_conn} <- decode_request(conn),
          {:ok, image_binary} <- fetch_image(request.image_url),
-         {:ok, image_info} <- get_image_info(image_binary),
+         {:ok, image_info} <- ImageMagick.get_image_info(image_binary),
          {:ok, bucket, key, output_size} <- perform_conversion(request, image_binary) do
       # Build MinIO URL for the PDF
       pdf_url = build_s3_url(bucket, key)
@@ -141,23 +141,23 @@ defmodule ConversionController do
     end
   end
 
-  defp get_image_info(image_binary) do
-    case ImageConverter.get_image_info(image_binary) do
-      {:ok, info} ->
-        Logger.info(
-          "[Image][ConversionController] Image: #{info.format} #{info.width}x#{info.height}, #{info.size} bytes"
-        )
+  # defp get_image_info(image_binary) do
+  #   case ImageConverter.get_image_info(image_binary) do
+  #     {:ok, info} ->
+  #       Logger.info(
+  #         "[Image][ConversionController] Image: #{info.format} #{info.width}x#{info.height}, #{info.size} bytes"
+  #       )
 
-        {:ok, info}
+  #       {:ok, info}
 
-      {:error, reason} ->
-        Logger.error(
-          inspect("[Image][ConversionController] Failed to get image info: #{inspect(reason)}")
-        )
+  #     {:error, reason} ->
+  #       Logger.error(
+  #         inspect("[Image][ConversionController] Failed to get image info: #{inspect(reason)}")
+  #       )
 
-        {:error, :image_info_failed, reason}
-    end
-  end
+  #       {:error, :image_info_failed, reason}
+  #   end
+  # end
 
   defp bucket do
     Application.get_env(:image_svc, :image_bucket, "msvc-images")
@@ -200,32 +200,8 @@ defmodule ConversionController do
     end
   end
 
-  # defp store_pdf(request, pdf_binary) do
-  #   case UserSvcClient.store_pdf(
-  #          pdf_binary,
-  #          request.user_id,
-  #          request.storage_id,
-  #          request.user_email
-  #        ) do
-  #     {:ok, %{success: true} = store_response} ->
-  #       Logger.info(
-  #         "[Image][ConversionController] PDF stored successfully: #{store_response.storage_id}"
-  #       )
-
-  #       {:ok, store_response}
-
-  #     {:ok, %{success: false, message: message}} ->
-  #       Logger.error("[Image][ConversionController] Storage failed: #{message}")
-  #       {:error, :storage_failed, message}
-
-  #     {:error, reason} ->
-  #       Logger.error("[Image][ConversionController] Failed to store PDF: #{inspect(reason)}")
-  #       {:error, :storage_failed, reason}
-  #   end
-  # end
-
   defp upload_binary_to_s3(pdf_binary, bucket, format) do
-    key = generate_storage_id(format)
+    key = generate_storage_id()
     # Upload to S3
     ExAws.S3.put_object(bucket, key, pdf_binary, content_type: "application/pdf")
     |> ExAws.request()
@@ -249,10 +225,10 @@ defmodule ConversionController do
     |> send_resp(500, response_binary)
   end
 
-  defp generate_storage_id(format) do
+  defp generate_storage_id() do
     timestamp = System.system_time(:microsecond)
     random = :crypto.strong_rand_bytes(8) |> Base.url_encode64(padding: false)
-    "#{timestamp}_#{random}.#{format}"
+    "#{timestamp}_#{random}.pdf"
   end
 
   # defp handle_fetch_error(conn, status) do

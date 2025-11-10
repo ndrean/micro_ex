@@ -1,33 +1,25 @@
 # Discover Microservices with Elixir with Observability
 
-This is a tiny demo of an **Plug/Elixir-based microservices architecture** demonstrating PNG-to-PDF image conversion with email notifications.
+This is a tiny demo of **Phoenix/Elixir-based microservices** demonstrating PNG-to-PDF image conversion with email notifications.
 
-The idea of this demo is to use OpenAPI, protocol buffers and use OpenTelemetry to collects the three observables, namely logs, traces and metrics.
+The idea of this demo is to use:
 
-Firtly a quote:
-
-> "Logs, metrics, and traces are often known as the three pillars of observability. While plainly having access to logs, metrics, and traces doesn’t necessarily make systems more observable, these are powerful tools that, if understood well, can unlock the ability to build better systems."
-
-We are only scratching the surface.
+- an OpenAPI design first,
+- use protocol buffers contracts between services over HTTP/1.1,
+- instrument with OpenTelemetry to collect the three observables, namely logs, traces and metrics.
 
 The system still uses quite a few technologies.
 
-- `Plug` for simple `Elixir` app
-- `Bandit` for HTTP servers
-- Protocol buffers for inter-service communication serialization
+- Protocol buffers for inter-service communication serialization with a compiled package-like installation
 - `Oban` for background job processing backed with the database `SQLite`
-- `Req` for HTTP client
 - `Swoosh` for email delivery
 - `ImageMagick` for image conversion
 - `MinIO` for S3 compatible local-cloud storage
-- `OpenTelemetry` and `Jaeger` for traces with `OpenSearch` back storage
+- `OpenTelemetry` with `Jaeger` and `Tempo` for traces (the later uses`MinIO` for back storage)
 - `Promtail` with `Loki` linked to `MinIO` for logs
 - `Prometheus` for metrics
-- `Grafana` for global dashboards
-- `PromEx` for helping to setup `Grafana` dashboards
+- `Grafana` for global dashboards and `PromEx` for helping to setup `Grafana` dashboards
 
-We run 5 `Elixir` apps as microservices communicating via Protocol buffers for serialization over **HTTP/1**.
-We instrumented the app with `OpenTelemetry`.
 
 It is designed [API-first ➡ Code] as this is the easiest way to build contracts between services and design the proto files accordingly.
 
@@ -228,7 +220,6 @@ This workflow demonstrates efficient binary data handling using the "Pull Model"
     - Relays completion to client
 13. user_svc → `client_svc/ReceiveNotification` (final callback with result)
 
-
 ### API Design and Documentation
 
 You receive a ticket to implement an API.
@@ -337,6 +328,12 @@ http://localhost:8080?url=specs/image_svc.yaml
 ## Observability O11Y
 
 Now that we have our workflows, we want to add observability.
+
+Firtly a quote:
+
+> "Logs, metrics, and traces are often known as the three pillars of observability. While plainly having access to logs, metrics, and traces doesn’t necessarily make systems more observable, these are powerful tools that, if understood well, can unlock the ability to build better systems."
+
+We will only scratch the surface of observability.
 
 ### Stack Overview
 
@@ -726,40 +723,14 @@ Communication pattern:
 - Binary protobuf encoding/decoding
 - Synchronous request-response + async job processing
 
-### Protobuf utilities
+### Centralized Proto Compilation
 
-First, ensure you have the `protoc` compiler installed on your system (see [Protocol Buffers installation guide](https://grpc.io/docs/protoc-installation/)).
+This project uses a **centralized proto library** (`libs/protos`) that automatically compiles `.proto` definitions and distributes them as a Mix dependency. No manual `protoc` commands or file copying needed.
 
-Then install the protobuf compiler plugin for Elixir:
+**Prerequisites**:
 
-```sh
-mix escript.install hex protobuf 0.15.0
-```
-
-Add the protobuf dependency to each service's `mix.exs`:
-
-```elixir
-{:protobuf, "~> 0.15.0"}
-```
-
-**Important**: All `.proto` files are in the `/protos` directory (single source of truth). We generate `*.pb.ex` files for each service that needs them.
-
-We then generate an `email.pb.ex` for Elixir that we want to place in two app , job_service and email_service, as both app will communicate together and send messages of type `EmailRequest` and `EmailResponse`.
-
-```sh
-# Generate all protos for all services (run after modifying any .proto file)
-# Note: protoc automatically creates lib/protos/ subdirectory from proto file path
-for svc in user_svc job_svc email_svc image_svc client_svc; do
-  for proto in protos/*.proto; do
-    protoc --elixir_out=./$svc/lib/ --proto_path=. $proto
-  done
-done
-
-# Or more concisely (generates all at once):
-for svc in user_svc job_svc email_svc image_svc client_svc; do
-  protoc --elixir_out=./$svc/lib/ --proto_path=. protos/*.proto
-done
-```
+- `protoc` compiler installed ([installation guide](https://grpc.io/docs/protoc-installation/))
+- For local development: `mix escript.install hex protobuf` (adds `protoc-gen-elixir` to PATH)
 
 **Proto File Distribution**:
 
@@ -768,7 +739,62 @@ done
 - `email.proto` → job_svc, email_svc
 - `job.proto` → job_svc
 
-These `*.pb.ex` files should be used in every app that uses this contract to exchange messages.
+**Design Pattern**:
+
+1. **Single source of truth**: All `.proto` files live in `libs/protos/proto_defs/`
+2. **Custom Mix compiler**: Automatically compiles protos during `mix deps.get`
+3. **Path dependency**: Services include `{:protos, path: "../../libs/protos"}` in mix.exs
+4. **No manual copying**: Compiled `*.pb.ex` files are generated once and reused
+
+**How it works**:
+
+```elixir
+# libs/protos/mix.exs
+def project do
+  [
+    compilers: Mix.compilers() ++ [:proto_compiler],
+    proto_compiler: [
+      source_dir: "proto_defs",
+      output_dir: "lib/protos"
+    ]
+  ]
+end
+
+# apps/client_svc/mix.exs
+defp deps do
+  [
+    {:protos, path: "../../libs/protos"},  # Just add dependency
+    {:protobuf, "~> 0.15.0"}
+  ]
+end
+```
+
+**Container implementation** (applies to all service Dockerfiles):
+
+```dockerfile
+# 1. Install protoc system package
+RUN apk add --no-cache protobuf-dev
+
+# 2. Copy shared protos library
+COPY libs/protos libs/protos/
+
+# 3. Install Mix dependencies (triggers proto compilation)
+RUN mix deps.get --only prod
+
+# 4. Install protoc-gen-elixir plugin and add to PATH
+RUN mix escript.install --force hex protobuf
+ENV PATH="/root/.mix/escripts:${PATH}"
+
+# 5. Compile (protos already compiled as dependency)
+RUN mix compile
+```
+
+**Benefits**:
+
+- DRY: Update `.proto` files in one place
+- Type safety: All services use identical message definitions
+- Build automation: No manual `protoc` commands
+- Container-ready: Works in both dev and Docker environments
 
 ## OpenTelemetry
 
@@ -1160,4 +1186,10 @@ EventStore.query(
   event_type: :job_failed,
   data: %{error: "timeout", attempt: 3}
 )
+```
+
+Testing ImageMagick in container: create a PNG image 100x100 filled with red and pipe into te command.
+
+```sh
+docker exec msvc-image-svc sh -c 'magick -size 100x100 xc:red png:- | magick png:- -limit thread 10 -quality 95 -density 300 pdf:- 2>&1 | head -c 100'
 ```

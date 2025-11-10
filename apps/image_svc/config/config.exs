@@ -23,23 +23,25 @@ config :image_svc, ImageService.PromEx,
   grafana: :disabled,
   metrics_server: :disabled
 
-config :image_svc,
-  conversion_cache_db: "db/conversion_cache.sql3",
-  default_converter: ImageSvc.ParallelConverter,
-  # StreamingConverter
-  default_threads: System.schedulers_online() |> div(2),
-  enable_streaming: true
-
 # OpenTelemetry -------------------------------------------------------
 config :opentelemetry,
   span_processor: :batch,
   traces_exporter: :otlp,
   resource: %{service: "image_svc"}
 
+# processors: [
+#   otel_batch_processor: %{
+#     exporter: :otlp
+#     # exporter: %{
+#     # endpoints: [{:grpc, otelcollector_host, otel_collector__port, []}]
+#     # }
+#   }
+# ]
+
 config :opentelemetry_ecto, :tracer, repos: [ImageService.Repo]
 
 # Add service name to all logs
-config :logger, :default_formatter, metadata: [:service]
+config :logger, :default_formatter, metadata: [:service, :span_id, :trace_id]
 
 config :phoenix, :json_library, Jason
 

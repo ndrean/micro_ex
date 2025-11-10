@@ -15,7 +15,7 @@ scrape_configs:
   # Client Service metrics
   - job_name: 'client_svc'
     static_configs:
-      - targets: ['client_svc:4000']
+      - targets: ['client_svc:8085']
         labels:
           service: 'client_svc'
           environment: 'dev'

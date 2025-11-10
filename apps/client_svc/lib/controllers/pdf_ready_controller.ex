@@ -66,8 +66,10 @@ defmodule PdfReadyController do
 
   def maybe_decode_request(binary_body) do
     try do
-      %Mcsv.PdfReadyNotification{} = resp = Mcsv.PdfReadyNotification.decode(binary_body)
-      | {:ok, resp}
+      %Mcsv.PdfReadyNotification{} =
+        resp = Mcsv.PdfReadyNotification.decode(binary_body)
+
+      {:ok, resp}
     catch
       :error, reason ->
         Logger.error("[PdfReady][PdfReadyController] Protobuf decode error: #{inspect(reason)}")

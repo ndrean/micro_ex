@@ -47,7 +47,7 @@ defmodule UserSvc.MixProject do
       extra_applications: [
         :logger,
         # :inets,
-        :os_mon,
+        # :os_mon,
         :tls_certificate_check
       ],
       mod: {UserSvc.Application, []}
@@ -57,6 +57,7 @@ defmodule UserSvc.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
+      {:protos, path: "../../libs/protos"},
       {:phoenix, "~> 1.8.1"},
       {:bandit, "~> 1.8"},
       {:plug, "~> 1.18"},

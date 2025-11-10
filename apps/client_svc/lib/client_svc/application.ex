@@ -8,8 +8,8 @@ defmodule ClientService.Application do
   def start(_type, _args) do
     children = [
       # PromEx metrics
-      ClientServiceWeb.Telemetry,
       ClientService.PromEx,
+      ClientServiceWeb.Telemetry,
       ClientServiceWeb.Endpoint
     ]
 

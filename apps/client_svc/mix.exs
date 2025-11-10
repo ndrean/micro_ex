@@ -10,6 +10,7 @@ defmodule ClientSvc.MixProject do
       deps_path: "deps",
       lockfile: "mix.lock",
       elixir: "~> 1.19",
+      elixirc_paths: ["lib"],
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       releases: [
@@ -31,13 +32,16 @@ defmodule ClientSvc.MixProject do
         # :os_mon,
         :tls_certificate_check
       ],
-      mod: {ClientService.Application, []}
+      mod: {ClientService.Application, []},
+      include_executables_for: [:unix],
+      strip_beams: false
     ]
   end
 
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
+      {:protos, path: "../../libs/protos"},
       {:phoenix, "~> 1.8"},
       {:bandit, "~> 1.8"},
       {:plug, "~> 1.18"},

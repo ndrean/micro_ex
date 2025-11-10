@@ -9,7 +9,7 @@ config :user_svc, UserSvcWeb.Endpoint,
   url: [host: "localhost"],
   adapter: Bandit.PhoenixAdapter,
   http: [
-    ip: {127, 0, 0, 1},
+    ip: {0, 0, 0, 0},  # Bind to all interfaces for Docker networking
     port: port
   ],
   server: true,

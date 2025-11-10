@@ -44,8 +44,8 @@ defmodule ImageSvc.MixProject do
     [
       extra_applications: [
         :logger,
-        :os_mon,
-        :inets,
+        # :os_mon,
+        # :inets,
         :tls_certificate_check
       ],
       mod: {ImageService.Application, []}
@@ -55,6 +55,7 @@ defmodule ImageSvc.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
+      {:protos, path: "../../libs/protos"},
       {:bandit, "~> 1.8"},
       {:phoenix, "~> 1.8.1"},
       {:plug, "~> 1.16"},
@@ -75,6 +76,7 @@ defmodule ImageSvc.MixProject do
       {:opentelemetry_phoenix, "~> 2.0"},
       {:opentelemetry_bandit, "~> 0.3.0"},
       {:opentelemetry_exporter, "~> 1.10"},
+      {:opentelemetry_logger_metadata, "~> 0.2.0"},
       {:tls_certificate_check, "~> 1.29"},
 
       # Prometheus metrics
