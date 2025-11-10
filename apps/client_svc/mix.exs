@@ -10,6 +10,7 @@ defmodule ClientSvc.MixProject do
       deps_path: "deps",
       lockfile: "mix.lock",
       elixir: "~> 1.19",
+      elixirc_paths: ["lib"],
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       releases: [
@@ -27,16 +28,21 @@ defmodule ClientSvc.MixProject do
     [
       extra_applications: [
         :logger,
-        :os_mon,
+        # :inets,
+        # :os_mon,
         :tls_certificate_check
       ],
-      mod: {ClientApp, []}
+      mod: {ClientService.Application, []},
+      include_executables_for: [:unix],
+      strip_beams: false
     ]
   end
 
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
+      {:protos, path: "../../libs/protos"},
+      {:phoenix, "~> 1.8"},
       {:bandit, "~> 1.8"},
       {:plug, "~> 1.18"},
       {:req, "~> 0.5.15"},
@@ -44,6 +50,8 @@ defmodule ClientSvc.MixProject do
       {:jason, "~> 1.4"},
       {:protobuf, "~> 0.15.0"},
       # {:telemetry, "~> 1.3"},
+      {:opentelemetry_phoenix, "~> 2.0"},
+      {:opentelemetry_bandit, "~> 0.3.0"},
       {:opentelemetry_exporter, "~> 1.10"},
       {:opentelemetry, "~> 1.7"},
       {:opentelemetry_api, "~> 1.5"},
@@ -51,6 +59,7 @@ defmodule ClientSvc.MixProject do
       {:tls_certificate_check, "~> 1.29"},
 
       # Prometheus metrics
+      {:prom_ex, "~> 1.11.0"},
       {:telemetry_metrics_prometheus_core, "~> 1.2"},
       {:telemetry_poller, "~> 1.3"},
 
@@ -60,9 +69,12 @@ defmodule ClientSvc.MixProject do
       # OpenAPI documentation
       {:open_api_spex, "~> 3.21"},
 
-      # {:telemetry_metrics, "~> 1.1"},
+      # static tests
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
-      {:credo, "~> 1.7", only: [:dev, :test], runtime: false}
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+      {:credo_naming, "~> 2.1", only: [:dev, :test], runtime: false},
+      # test dependencies
+      {:yaml_elixir, "~> 2.12", only: :test}
     ]
   end
 end

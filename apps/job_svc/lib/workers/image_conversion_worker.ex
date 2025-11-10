@@ -37,16 +37,16 @@ defmodule JobService.Workers.ImageConversionWorker do
     attach_trace_context(args)
 
     Logger.info(
-      "[ImageConversionWorker] Processing conversion for user #{args["user_id"]} (#{args["user_email"]})"
+      "[Job][ImageConversionWorker] Processing conversion for user #{args["user_id"]} (#{args["user_email"]})"
     )
 
     case JobService.Clients.ImageSvcClient.convert_image(args) do
       :ok ->
-        Logger.info("[ImageConversionWorker] Conversion completed successfully")
+        Logger.info("[Job][ImageConversionWorker] Conversion completed successfully")
         :ok
 
       {:error, reason} ->
-        Logger.error("[ImageConversionWorker] Conversion failed: #{inspect(reason)}")
+        Logger.error("[Job][ImageConversionWorker] Conversion failed: #{inspect(reason)}")
         {:error, reason}
     end
   end

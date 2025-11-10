@@ -9,6 +9,8 @@ defmodule JobService.Clients.ImageSvcClient do
 
   defp image_svc_base_url, do: Application.get_env(:job_svc, :image_svc_base_url)
   defp image_svc_endpoints, do: Application.get_env(:job_svc, :image_svc_endpoints)
+  defp user_svc_base_url, do: Application.get_env(:job_svc, :user_svc_base_url)
+  defp user_svc_endpoints, do: Application.get_env(:job_svc, :user_svc_endpoints)
 
   @doc """
   Requests image conversion from image_svc.
@@ -43,19 +45,23 @@ defmodule JobService.Clients.ImageSvcClient do
         response = Mcsv.ImageConversionResponse.decode(response_binary)
 
         if response.success do
-          # Logger.info("[ImageSvcClient] Conversion acknowledged: #{response.message}")
+          Logger.info("[Job][ImageSvcClient] Conversion acknowledged: #{response.message}")
+          # Forward the entire response_binary to user_svc without re-encoding
+          Logger.info("[Job][ImageSvcClient] Forwarding result to user_svc")
+          post(user_svc_base_url(), user_svc_endpoints().notify_image_converted, response_binary)
           :ok
         else
-          Logger.error("[ImageSvcClient] Conversion failed: #{response.message}")
+          Logger.error("[Job][ImageSvcClient] Conversion failed: #{response.message}")
           {:error, response.message}
         end
 
-      {:ok, %{status: status}} ->
-        Logger.error("[ImageSvcClient] HTTP #{status}")
+      {:ok, %{status: status, body: body}} ->
+        reason = Mcsv.ImageConversionResponse.decode(body)
+        Logger.error("[Job][ImageSvcClient] HTTP #{reason}")
         {:error, "HTTP #{status}"}
 
       {:error, reason} ->
-        Logger.error("[ImageSvcClient] Request failed: #{inspect(reason)}")
+        Logger.error("[Job][ImageSvcClient] Request failed: #{inspect(reason)}")
         {:error, reason}
     end
   end

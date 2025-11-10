@@ -1,4 +1,4 @@
-defmodule JobSvc.Release do
+defmodule JobService.Release do
   @moduledoc """
   Used for executing DB release tasks when run in production without Mix installed.
   """

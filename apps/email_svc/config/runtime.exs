@@ -3,19 +3,46 @@ import Config
 # Runtime configuration for email_svc
 
 # HTTP Port
-port = System.get_env("PORT", "8083") |> String.to_integer()
+port = System.get_env("EMAIL_SVC_PORT", "8083") |> String.to_integer()
+
+config :email_svc, EmailServiceWeb.Endpoint,
+  url: [host: "localhost"],
+  adapter: Bandit.PhoenixAdapter,
+  http: [
+    ip: {0, 0, 0, 0},  # Bind to all interfaces for Docker networking
+    port: port
+  ],
+  server: true,
+  check_origin: false,
+  secret_key_base: "lSELLkV2qXzO3PbrZjubtnS84cvDgItzZ3cuQMlmRrM/f5Iy0YHJgn/900qLm7/a"
 
 config :email_svc,
   port: port
 
-# OpenTelemetry Configuration
-config :opentelemetry,
-  service_name: System.get_env("OTEL_SERVICE_NAME", "email_svc"),
-  traces_exporter: :otlp
+# Determine OTLP protocol from environment variable
+# Options: "http" (default) or "grpc" (production)
+otlp_protocol =
+  case System.get_env("OTEL_EXPORTER_OTLP_PROTOCOL", "http") do
+    "grpc" ->
+      :grpc
+
+    "http" ->
+      :http_protobuf
+
+    other ->
+      IO.warn("Unknown OTLP protocol '#{other}', defaulting to :http_protobuf")
+      :http_protobuf
+  end
+
+otlp_endpoint =
+  case System.get_env("OTEL_EXPORTER_OTLP_ENDPOINT") do
+    nil -> "http://127.0.0.1:4318"
+    endpoint -> endpoint
+  end
 
 config :opentelemetry_exporter,
-  otlp_protocol: :http_protobuf,
-  otlp_endpoint: System.get_env("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318")
+  otlp_protocol: otlp_protocol,
+  otlp_endpoint: otlp_endpoint
 
 # Logger Configuration
 log_level = System.get_env("LOG_LEVEL", "info") |> String.to_atom()
@@ -48,8 +75,7 @@ adapter_module =
     _ -> Swoosh.Adapters.Local
   end
 
-config :email_svc, EmailService.Mailer,
-  adapter: adapter_module
+config :email_svc, EmailService.Mailer, adapter: adapter_module
 
 # SMTP config (only used if MAILER_ADAPTER=smtp)
 if adapter_module == Swoosh.Adapters.SMTP do

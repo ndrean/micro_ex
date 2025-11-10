@@ -1,13 +1,20 @@
-# Multi-stage Dockerfile for image_svc
+# Multi-stage Dockerfile for image_svc (Monorepo)
+# Build context MUST be the repo root: docker build -f apps/image_svc/Dockerfile .
 # Stage 1: Build the release
+ARG PORT=8084
+ARG OS=alpine:3.22.2
 ARG ELIXIR_IMAGE=hexpm/elixir:1.19.2-erlang-28.1-alpine-3.22.2
 FROM ${ELIXIR_IMAGE} AS builder
 
-# Install build dependencies
+ARG PORT
+ENV PORT=${PORT}
+
+# Install build dependencies + protoc for proto compilation
 RUN apk add --no-cache \
     build-base \
     git \
-    openssl-dev
+    openssl-dev \
+    protobuf-dev
 
 # Set working directory
 WORKDIR /app
@@ -16,35 +23,52 @@ WORKDIR /app
 RUN mix local.hex --force && \
     mix local.rebar --force
 
-# Copy dependency files first (for better caching)
-COPY mix.exs mix.lock ./
-COPY config/config.exs config/
+# Copy shared protos library first (for better caching)
+COPY libs/protos libs/protos/
 
-# Install dependencies
+# Copy image_svc dependency files
+COPY apps/image_svc/mix.exs apps/image_svc/mix.lock apps/image_svc/
+COPY apps/image_svc/config/config.exs apps/image_svc/config/prod.exs apps/image_svc/config/
+
+# Set working directory to image_svc
+WORKDIR /app/apps/image_svc
+
+# Install dependencies (will compile protos lib automatically)
 ENV MIX_ENV=prod
 RUN mix deps.get --only prod
 
-# Copy application code
-COPY lib ./lib
-COPY config/runtime.exs config/
+# Install protoc-gen-elixir escript (required for proto compilation)
+RUN mix escript.install --force hex protobuf
+ENV PATH="/root/.mix/escripts:${PATH}"
 
-# Compile application
+# Copy application code
+COPY apps/image_svc/lib ./lib
+COPY apps/image_svc/priv ./priv
+COPY apps/image_svc/config/runtime.exs config/
+
+# Compile application (protos will be compiled as dependency)
 RUN mix compile
 
 # Build release
 RUN mix release
 
 # Stage 2: Create minimal runtime image
-FROM alpine:3.22.2 AS app
+FROM ${OS} AS app
 
-# Install runtime dependencies INCLUDING ImageMagick for image processing
+ARG PORT
+ENV PORT=${PORT}
+
+# Install runtime dependencies for image processing
+# - ImageMagick: For image format detection, metadata extraction, and image-to-PDF conversion
+# - Ghostscript: Required by ImageMagick for PDF rendering (used internally)
 RUN apk add --no-cache \
     bash \
     openssl \
     ncurses-libs \
     libstdc++ \
     wget \
-    imagemagick
+    imagemagick \
+    ghostscript
 
 # Create app user
 RUN addgroup -g 1000 appuser && \
@@ -52,18 +76,21 @@ RUN addgroup -g 1000 appuser && \
 
 WORKDIR /app
 
-# Copy release from builder
-COPY --from=builder --chown=appuser:appuser /app/_build/prod/rel/image_svc ./
+# Copy release from builder (built in /app/apps/image_svc)
+COPY --from=builder --chown=appuser:appuser /app/apps/image_svc/_build/prod/rel/image_svc ./
+
+# Create database directory with proper permissions (must be before USER switch)
+RUN mkdir -p db && chown -R appuser:appuser db
 
 # Switch to non-root user
 USER appuser
 
 # Expose port (can be overridden with PORT env var)
-EXPOSE 8084
+EXPOSE ${PORT}
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD ["/bin/sh", "-c", "wget -q --spider http://localhost:${PORT:-8084}/health || exit 1"]
+    CMD ["/bin/sh", "-c", "wget -q --spider http://localhost:${PORT}/health || exit 1"]
 
 # Start the application
 CMD ["bin/image_svc", "start"]

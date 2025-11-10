@@ -1,9 +1,7 @@
-defmodule EmailApp do
+defmodule EmailService.Application do
   use Application
 
-  @moduledoc """
-  Entry point
-  """
+  @moduledoc false
 
   require Logger
 
@@ -13,13 +11,12 @@ defmodule EmailApp do
     Logger.info("Starting EMAIL Server on port #{port}")
 
     children = [
-      EmailSvc.Metrics,
-      {Bandit, plug: EmailRouter, port: 8083}
-
-      # Start the Oban job processing system
+      EmailService.PromEx,
+      EmailServiceWeb.Telemetry,
+      EmailServiceWeb.Endpoint
     ]
 
-    opts = [strategy: :one_for_one, name: JobSvc.Supervisor]
+    opts = [strategy: :one_for_one, name: EmailService.Supervisor]
     Supervisor.start_link(children, opts)
   end
 end

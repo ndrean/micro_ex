@@ -42,12 +42,12 @@ defmodule JobService.Clients.EmailSvcClient do
         :ok
 
       {:ok, %{status: status}} ->
-        Logger.error("[EmailSvcClient] HTTP #{status}")
+        Logger.error("[Job][EmailSvcClient] HTTP #{status}")
         notify_email_delivery_failure()
-        {:error, "HTTP #{status}"}
+        {:error, "[Job] HTTP #{status}"}
 
       {:error, reason} ->
-        Logger.error("[EmailSvcClient] Request failed: #{inspect(reason)}")
+        Logger.error("[Job][EmailSvcClient] Request failed: #{inspect(reason)}")
         notify_email_delivery_failure()
         {:error, reason}
     end
@@ -64,7 +64,7 @@ defmodule JobService.Clients.EmailSvcClient do
   defp notify_email_delivery_failure do
     failure_response =
       %Mcsv.EmailResponse{
-        message: "Failed to send",
+        message: "[Job] Failed to send",
         success: false
       }
       |> Mcsv.EmailResponse.encode()

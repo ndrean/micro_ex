@@ -10,53 +10,59 @@ defmodule Clients.ClientSvcClient do
   # Runtime config - reads from runtime.exs via environment variables
   defp base_url, do: Application.get_env(:user_svc, :client_svc_base_url)
   defp endpoints, do: Application.get_env(:user_svc, :client_svc_endpoints)
+  defp client_svc_base_url, do: Application.get_env(:user_svc, :client_svc_base_url)
+  defp client_svc_endpoints, do: Application.get_env(:user_svc, :client_svc_endpoints)
 
   @doc """
-  Notifies the client that their PDF is ready.
+  Notifies client_svc that image conversion is complete.
 
-  Sends an async notification (non-blocking) to client_svc.
+  Transforms ImageConversionResponse into PdfReadyNotification and forwards to client_svc.
 
   ## Parameters
-  - `user_email`: User's email address
-  - `storage_id`: The PDF's storage ID in MinIO
-  - `presigned_url`: Temporary download URL
-  - `size`: File size in bytes
-  """
-  def notify_pdf_ready(user_email, storage_id, presigned_url, size) do
-    Logger.info("[ClientSvcClient] Notifying client that PDF is ready for #{user_email}")
+  - `image_conversion_response`: Decoded Mcsv.ImageConversionResponse struct
 
+  ## Returns
+  - `:ok` on success
+  - `{:error, reason}` on failure
+  """
+  def notify_image_converted(%Mcsv.ImageConversionResponse{} = response) do
+    Logger.info(
+      "[User][ClientSvcClient] Notifying client about PDF ready for storage_id=#{response.storage_id}"
+    )
+
+    # Transform ImageConversionResponse -> PdfReadyNotification
     notification =
       %Mcsv.PdfReadyNotification{
-        user_email: user_email,
-        storage_id: storage_id,
-        presigned_url: presigned_url,
-        size: size,
-        message: "Your PDF is ready! Click the URL to view."
+        user_email: response.user_email,
+        storage_id: response.storage_id,
+        presigned_url: response.pdf_url,
+        # Use pdf_url as presigned_url (already contains full MinIO URL)
+        size: response.output_size,
+        message:
+          "Your PDF is ready! Size: #{response.width}x#{response.height}, #{format_size(response.output_size)}"
       }
       |> Mcsv.PdfReadyNotification.encode()
 
-    # Send async notification (don't block on response)
-    # Capture current context to propagate to spawned task
-    ctx = OpenTelemetry.Ctx.get_current()
+    case post(client_svc_base_url(), client_svc_endpoints().pdf_ready, notification) do
+      {:ok, %{status: 204}} ->
+        Logger.info("[User][ClientSvcClient] Client notified about PDF successfully")
+        :ok
 
-    Task.start(fn ->
-      # Attach parent context in spawned process
-      OpenTelemetry.Ctx.attach(ctx)
+      {:ok, %{status: status}} ->
+        Logger.warning("[User][ClientSvcClient] PDF notification returned status #{status}")
 
-      case post(base_url(), endpoints().pdf_ready, notification) do
-        {:ok, %{status: 204}} ->
-          Logger.info("[ClientSvcClient] Client notified successfully")
+        {:error, "HTTP #{status}"}
 
-        {:ok, %{status: status}} ->
-          Logger.warning("[ClientSvcClient] Client notification returned status #{status}")
+      {:error, reason} ->
+        Logger.warning("[User][ClientSvcClient] PDF notification failed: #{inspect(reason)}")
 
-        {:error, reason} ->
-          Logger.warning("[ClientSvcClient] Client notification failed: #{inspect(reason)}")
-      end
-    end)
-
-    :ok
+        {:error, reason}
+    end
   end
+
+  defp format_size(bytes) when bytes < 1024, do: "#{bytes}B"
+  defp format_size(bytes) when bytes < 1024 * 1024, do: "#{Float.round(bytes / 1024, 1)}KB"
+  defp format_size(bytes), do: "#{Float.round(bytes / (1024 * 1024), 1)}MB"
 
   @doc """
   Forwards email delivery notification to client_svc.
@@ -68,20 +74,20 @@ defmodule Clients.ClientSvcClient do
   - `:ok` on success
   - `{:error, reason}` on failure
   """
-  def receive_notification(message) do
-    Logger.info("[ClientSvcClient] Forwarding email notification")
+  def push_notification(message) do
+    Logger.info("[User][ClientSvcClient] Forwarding email notification")
 
     case post(base_url(), endpoints().receive_notification, message) do
       {:ok, %{status: 204}} ->
-        Logger.info("[ClientSvcClient] Notification forwarded successfully")
+        Logger.info("[User][ClientSvcClient] Notification forwarded successfully")
         :ok
 
       {:ok, %{status: status}} ->
-        Logger.warning("[ClientSvcClient] Notification returned status #{status}")
-        {:error, "HTTP #{status}"}
+        Logger.warning("[User][ClientSvcClient] Notification returned status #{status}")
+        {:error, "[User] HTTP #{status}"}
 
       {:error, reason} ->
-        Logger.error("[ClientSvcClient] Notification failed: #{inspect(reason)}")
+        Logger.error("[User][ClientSvcClient] Notification failed: #{inspect(reason)}")
         {:error, reason}
     end
   end
@@ -99,7 +105,7 @@ defmodule Clients.ClientSvcClient do
            headers: [{"content-type", "application/protobuf"}],
            receive_timeout: receive_timeout
          ) do
-      {:ok, response} -> {:ok, response}
+      {:ok, %Req.Response{} = response} -> {:ok, response}
       {:error, reason} -> {:error, reason}
     end
   end

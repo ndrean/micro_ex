@@ -24,14 +24,16 @@ defmodule StorageCleanupWorker do
   @impl Oban.Worker
   @spec perform(Oban.Job.t()) :: :ok | {:error, any()}
   def perform(_job) do
-    Logger.info("[StorageCleanup] Starting cleanup of files older than #{max_age_seconds()}s")
+    Logger.info(
+      "[Job][StorageCleanup] Starting cleanup of files older than #{max_age_seconds()}s"
+    )
 
     case list_all_objects() do
       {:ok, objects} ->
         cleanup_old_files(objects)
 
       {:error, reason} ->
-        Logger.error("[StorageCleanup] Failed to list objects: #{inspect(reason)}")
+        Logger.error("[Job][StorageCleanup] Failed to list objects: #{inspect(reason)}")
         {:error, reason}
     end
   end
@@ -63,7 +65,7 @@ defmodule StorageCleanupWorker do
       |> Enum.map(&delete_object/1)
       |> Enum.count(fn result -> result == :ok end)
 
-    Logger.info("[StorageCleanup] Deleted #{deleted_count} old files")
+    Logger.info("[Job][StorageCleanup] Deleted #{deleted_count} old files")
     :ok
   end
 
@@ -102,11 +104,11 @@ defmodule StorageCleanupWorker do
   defp delete_object(object) do
     case ExAws.S3.delete_object(image_bucket(), object.key) |> ExAws.request() do
       {:ok, _} ->
-        Logger.debug("[StorageCleanup] Deleted #{object.key}")
+        Logger.debug("[Job][StorageCleanup] Deleted #{object.key}")
         :ok
 
       {:error, reason} ->
-        Logger.warning("[StorageCleanup] Failed to delete #{object.key}: #{inspect(reason)}")
+        Logger.warning("[Job][StorageCleanup] Failed to delete #{object.key}: #{inspect(reason)}")
         {:error, reason}
     end
   end

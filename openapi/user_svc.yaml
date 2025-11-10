@@ -1,31 +1,36 @@
 openapi: 3.0.0
 info:
   title: User Service API
-  description: User management and orchestration service
+  description: Handler Client requests and S3 image storage entrypoint
   version: 1.0.0
 servers:
-  - url: http://localhost:8081
+  - url: http://localhost:8081/v1
     description: Local development
+  - url: https://user_svc:8081/v1
+    description: User service server
 
 paths:
-  /user_svc/CreateUser:
+  /user_svc/create_user/v1:
     post:
       summary: Create user and trigger email workflow
       operationId: createUser
       requestBody:
         required: true
         content:
-          application/x-protobuf:
+          application/protobuf:
             schema:
               type: object
               properties:
-                user_id:
+                id:
                   type: string
                 name:
                   type: string
                 email:
                   type: string
                   format: email
+                type:
+                  type: string
+                  enum: [welcome, notification]
       responses:
         '200':
           description: User created successfully
@@ -39,7 +44,7 @@ paths:
                   message:
                     type: string
 
-  /user_svc/NotifyEmailSent:
+  /user_svc/notify_email_sent/v1:
     post:
       summary: Receive callback from job_svc after email sent
       operationId: notifyEmailSent
@@ -60,7 +65,7 @@ paths:
         '200':
           description: Notification received
 
-  /user_svc/ConvertImage:
+  /user_svc/convert_image/v1:
     post:
       summary: Initiate image conversion workflow
       operationId: convertImage
@@ -94,7 +99,7 @@ paths:
                   message:
                     type: string
 
-  /user_svc/ImageLoader/{job_id}:
+  /user_svc/image_loader/v1/{job_id}:
     get:
       summary: Serve stored images to other services
       operationId: loadImage
@@ -120,7 +125,7 @@ paths:
         '404':
           description: Image not found
 
-  /user_svc/StoreImage:
+  /user_svc/store_image/v1:
     post:
       summary: Store image/PDF in MinIO and return presigned URL
       description: Stores binary data in MinIO object storage and generates a presigned URL for client access
@@ -157,81 +162,10 @@ paths:
                     type: string
                     description: Temporary S3 presigned URL for client access
 
-  /user/stream:
-    post:
-      summary: Stream-style endpoint (demo)
-      description: Sends chunked JSON responses
-      operationId: streamUser
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                id:
-                  type: string
-                name:
-                  type: string
-                email:
-                  type: string
-                age:
-                  type: integer
-                active:
-                  type: boolean
+  /health:
+    head:
+      summary: Check service health
+      operationId: healthCheck
       responses:
         '200':
-          description: Chunked JSON responses
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  ok:
-                    type: boolean
-                  message:
-                    type: string
-
-  /events:
-    get:
-      summary: Server-sent events endpoint (demo)
-      description: Progressive streaming of events
-      operationId: getEvents
-      responses:
-        '200':
-          description: Event stream
-          content:
-            text/event-stream:
-              schema:
-                type: object
-                properties:
-                  event:
-                    type: string
-                  message:
-                    type: string
-
-  /stream/{count}:
-    get:
-      summary: SSE-style continuous stream (demo)
-      operationId: streamCount
-      parameters:
-        - name: count
-          in: path
-          required: true
-          schema:
-            type: integer
-          description: Number of events to stream
-      responses:
-        '200':
-          description: Server-sent event stream
-          content:
-            text/event-stream:
-              schema:
-                type: object
-                properties:
-                  id:
-                    type: integer
-                  event_count:
-                    type: string
-                  timestamp:
-                    type: integer
+          description: Service is healthy

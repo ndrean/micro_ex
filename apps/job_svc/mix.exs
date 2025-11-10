@@ -12,16 +12,20 @@ defmodule JobSvc.MixProject do
       elixir: "~> 1.19",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
-      releases: [
-        job_svc: [
-          applications: [
-            opentelemetry_exporter: :permanent,
-            opentelemetry: :temporary,
-            job_svc: :permanent
-          ],
-          include_executables_for: [:unix],
-          strip_beams: false
-        ]
+      releases: releases()
+    ]
+  end
+
+  defp releases do
+    [
+      job_svc: [
+        applications: [
+          job_svc: :permanent,
+          opentelemetry_exporter: :permanent,
+          opentelemetry: :temporary
+        ],
+        include_executables_for: [:unix],
+        strip_beams: false
       ]
     ]
   end
@@ -29,14 +33,21 @@ defmodule JobSvc.MixProject do
   # Run "mix help compile.app" to learn about applications.
   def application do
     [
-      extra_applications: [:logger, :os_mon, :inets, :tls_certificate_check],
-      mod: {JobApp, []}
+      extra_applications: [
+        :logger,
+        :os_mon,
+        # :inets,
+        :tls_certificate_check
+      ],
+      mod: {JobService.Application, []}
     ]
   end
 
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
+      {:protos, path: "../../libs/protos"},
+      {:phoenix, "~> 1.8"},
       {:bandit, "~> 1.8"},
       {:req, "~> 0.5.15"},
       {:jason, "~> 1.4"},
@@ -50,10 +61,13 @@ defmodule JobSvc.MixProject do
       # {:opentelemetry_oban, "~> 1.1"},
       {:opentelemetry_ecto, "~> 1.2"},
       {:opentelemetry, "~> 1.7"},
+      {:opentelemetry_phoenix, "~> 2.0"},
+      {:opentelemetry_bandit, "~> 0.3.0"},
       {:opentelemetry_req, "~> 1.0"},
       {:tls_certificate_check, "~> 1.29"},
 
       # Prometheus metrics
+      {:prom_ex, "~> 1.11.0"},
       {:telemetry_metrics_prometheus_core, "~> 1.2"},
       {:telemetry_poller, "~> 1.3"},
 
@@ -72,6 +86,7 @@ defmodule JobSvc.MixProject do
       # Database
       {:ecto_sql, "~> 3.12"},
       {:ecto_sqlite3, "~> 0.18"},
+      # Static code analysis
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false}
     ]

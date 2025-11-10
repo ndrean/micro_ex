@@ -12,16 +12,30 @@ defmodule UserSvc.MixProject do
       elixir: "~> 1.19",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
-      releases: [
-        user_svc: [
-          applications: [
-            opentelemetry_exporter: :permanent,
-            opentelemetry: :temporary,
-            user_svc: :permanent
-          ],
-          include_executables_for: [:unix],
-          strip_beams: false
-        ]
+      releases: releases()
+    ]
+  end
+
+  defp releases do
+    [
+      user_svc: [
+        applications: [
+          user_svc: :permanent,
+          opentelemetry_exporter: :permanent,
+          opentelemetry: :temporary
+        ],
+        # include_erts: true,
+        include_executables_for: [:unix],
+        strip_beams: false
+        # steps: [:assemble, &Bakeware.assemble/1],
+        # compiler_options: [
+        #   # Remove debug info
+        #   debug_info: false,
+        #   # Inline list functions
+        #   inline_list_funs: true,
+        #   # Inline functions up to 100 ops
+        #   inline_size: 100
+        # ]
       ]
     ]
   end
@@ -30,14 +44,21 @@ defmodule UserSvc.MixProject do
   def application do
     [
       # Only include OTP apps that need explicit startup ordering
-      extra_applications: [:logger, :tls_certificate_check],
-      mod: {UserApp, []}
+      extra_applications: [
+        :logger,
+        # :inets,
+        # :os_mon,
+        :tls_certificate_check
+      ],
+      mod: {UserSvc.Application, []}
     ]
   end
 
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
+      {:protos, path: "../../libs/protos"},
+      {:phoenix, "~> 1.8.1"},
       {:bandit, "~> 1.8"},
       {:plug, "~> 1.18"},
       {:req, "~> 0.5.15"},
@@ -53,25 +74,31 @@ defmodule UserSvc.MixProject do
       {:sweet_xml, "~> 0.7"},
 
       # OpenTelemetry for distributed tracing
+      {:opentelemetry_api, "~> 1.5"},
       {:opentelemetry_exporter, "~> 1.10"},
       {:opentelemetry, "~> 1.7"},
-      {:opentelemetry_api, "~> 1.5"},
+      {:opentelemetry_phoenix, "~> 2.0"},
+      {:opentelemetry_bandit, "~> 0.3.0"},
       {:opentelemetry_req, "~> 1.0"},
       {:tls_certificate_check, "~> 1.29"},
 
       # Prometheus metrics
+      {:prom_ex, "~> 1.11.0"},
       {:telemetry_metrics_prometheus_core, "~> 1.2"},
       {:telemetry_poller, "~> 1.3"},
 
-      # Structured JSON logging (optional - uncomment if using JSON logs)
-      # {:logger_json, "~> 7.0"},
+      # Structured JSON logging
+      {:logger_json, "~> 7.0"},
 
       # OpenAPI documentation
       {:open_api_spex, "~> 3.21"},
 
-      # dev
+      # static tests
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
-      {:credo, "~> 1.7", only: [:dev, :test], runtime: false}
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+      {:credo_naming, "~> 2.1", only: [:dev, :test], runtime: false},
+      # test dependencies
+      {:yaml_elixir, "~> 2.12", only: :test}
     ]
   end
 end

@@ -1,6 +1,6 @@
-defmodule UserApp do
+defmodule UserSvc.Application do
   use Application
-  require OpenTelemetry.Tracer
+  # require OpenTelemetry.Tracer
 
   @moduledoc """
   Entry point
@@ -13,14 +13,16 @@ defmodule UserApp do
   @impl true
   def start(_type, _args) do
     port = Application.get_env(:user_svc, :port, 8081)
-    Logger.info("Starting USER Server on port #{port}")
+    Logger.info("Starting USER Service on port #{port}")
     ensure_minio_bucket()
 
-    Logger.metadata(service: "user_svc")
-
     children = [
-      UserSvc.Metrics,
-      {Bandit, plug: UserRouter, port: 8081}
+      # 1. OpenTelemetry telemetry (must start first to catch all events)
+      UserSvcWeb.Telemetry,
+      # 2. PromEx for Grafana dashboards
+      UserSvc.PromEx,
+      # 3. Phoenix endpoint (serves HTTP on port via Bandit)
+      UserSvcWeb.Endpoint
     ]
 
     opts = [strategy: :one_for_one, name: UserSvc.Supervisor]

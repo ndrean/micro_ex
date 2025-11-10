@@ -1,0 +1,74 @@
+# Grafana Tempo Configuration
+# Distributed tracing backend with MinIO (S3) storage and gRPC OTLP receiver
+
+server:
+  http_listen_port: 3200
+  log_level: info
+
+distributor:
+  receivers:
+    # OTLP gRPC receiver (RECOMMENDED for production - efficient HTTP/2)
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+
+ingester:
+  # Number of traces to buffer before flushing to storage
+  max_block_duration: 5m
+
+compactor:
+  compaction:
+    block_retention: 168h  # 7 days (adjust based on your needs)
+
+storage:
+  trace:
+    backend: s3
+
+    # Write-Ahead Log (WAL) - local disk before MinIO
+    wal:
+      path: /tmp/tempo/wal
+
+    # Local cache (speeds up queries)
+    local:
+      path: /tmp/tempo/blocks
+
+    # MinIO (S3-compatible) backend configuration
+    s3:
+      bucket: tempo-traces                # Must match MinIO bucket created by minio-init
+      endpoint: minio:9000                # Docker service name
+      access_key: minioadmin              # Match your MINIO_ROOT_USER
+      secret_key: minioadmin              # Match your MINIO_ROOT_PASSWORD
+      insecure: true                      # Use HTTP (not HTTPS) for local development
+      # For production with HTTPS:
+      # insecure: false
+      # tls_insecure_skip_verify: false
+
+# Query settings (for Grafana integration)
+query_frontend:
+  search:
+    duration_slo: 5s
+    throughput_bytes_slo: 1.073741824e+09  # 1GB/s
+  trace_by_id:
+    duration_slo: 5s
+
+# Metrics for monitoring Tempo itself
+metrics_generator:
+  registry:
+    external_labels:
+      source: tempo
+      cluster: docker-compose-dev
+  storage:
+    path: /tmp/tempo/generator/wal
+    remote_write:
+      - url: http://prometheus:9090/api/v1/write  # Send Tempo metrics to Prometheus
+        send_exemplars: true
+  processor:
+    local_blocks:
+      filter_server_spans: false  # Include all spans in local blocks
+
+# Overrides and limits
+overrides:
+  metrics_generator_processors: [service-graphs, span-metrics, local-blocks]  # Enable RED metrics + TraceQL metrics

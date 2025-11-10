@@ -22,7 +22,7 @@ defmodule Clients.UserSvcClient do
   """
   @spec notify_email_sent(binary()) :: {:ok, :notified} | {:error, any()}
   def notify_email_sent(email_response_binary) do
-    Logger.info("[UserSvcClient] Notifying user_svc of email delivery")
+    Logger.info("[Job][UserSvcClient] Notifying user_svc of email delivery")
 
     post(user_base_url(), endpoints().notify_email_sent, email_response_binary)
   end
@@ -40,15 +40,15 @@ defmodule Clients.UserSvcClient do
            receive_timeout: 10_000
          ) do
       {:ok, %Req.Response{status: 204}} ->
-        Logger.info("[UserSvcClient] Notification sent successfully")
+        Logger.info("[Job][UserSvcClient] Notification sent successfully")
         {:ok, :notified}
 
-      {:ok, %Req.Response{status: status, body: body}} ->
-        Logger.error("[UserSvcClient] Unexpected status #{status}: #{inspect(body)}")
-        {:error, "HTTP #{status}"}
+      {:ok, %Req.Response{status: status, body: body} = _resp} ->
+        Logger.error("[Job][UserSvcClient] Status #{status}: #{body}")
+        {:error, "[Job] HTTP error: #{status}"}
 
       {:error, reason} ->
-        Logger.error("[UserSvcClient] Request failed: #{inspect(reason)}")
+        Logger.error("[Job][UserSvcClient] Request failed: #{inspect(reason)}")
         {:error, reason}
     end
   end

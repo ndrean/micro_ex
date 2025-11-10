@@ -11,13 +11,30 @@ defmodule ImageSvc.MixProject do
       elixir: "~> 1.19",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
-      releases: [
-        image_svc: [
-          applications: [
-            opentelemetry_exporter: :permanent,
-            opentelemetry: :temporary
-          ]
-        ]
+      releases: releases()
+    ]
+  end
+
+  defp releases do
+    [
+      image_svc: [
+        applications: [
+          image_svc: :permanent,
+          opentelemetry_exporter: :permanent,
+          opentelemetry: :temporary
+        ],
+        # include_erts: true,
+        include_executables_for: [:unix],
+        strip_beams: false
+        # steps: [:assemble, &Bakeware.assemble/1],
+        # compiler_options: [
+        # Remove debug info
+        # debug_info: false,
+        # Inline list functions
+        # inline_list_funs: true,
+        # Inline functions up to 100 ops
+        # inline_size: 100
+        # ]
       ]
     ]
   end
@@ -27,35 +44,52 @@ defmodule ImageSvc.MixProject do
     [
       extra_applications: [
         :logger,
-        :os_mon,
+        # :os_mon,
+        # :inets,
         :tls_certificate_check
       ],
-      mod: {ImageSvc.Application, []}
+      mod: {ImageService.Application, []}
     ]
   end
 
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
+      {:protos, path: "../../libs/protos"},
       {:bandit, "~> 1.8"},
+      {:phoenix, "~> 1.8.1"},
       {:plug, "~> 1.16"},
       {:req, "~> 0.5.15"},
       {:protobuf, "~> 0.15.0"},
       {:jason, "~> 1.4"},
+      {:ex_cmd, "~> 0.16.0"},
+      # Database
+      {:ecto_sql, "~> 3.12"},
+      {:ecto_sqlite3, "~> 0.18"},
+      {:exqlite, "~> 0.33.1"},
 
       # OpenTelemetry for distributed tracing (exporter MUST be before opentelemetry)
-      {:opentelemetry_api, "~> 1.5"},
-      {:opentelemetry_exporter, "~> 1.10"},
       {:opentelemetry, "~> 1.7"},
+      {:opentelemetry_api, "~> 1.5"},
       {:opentelemetry_req, "~> 1.0"},
+      {:opentelemetry_ecto, "~> 1.2"},
+      {:opentelemetry_phoenix, "~> 2.0"},
+      {:opentelemetry_bandit, "~> 0.3.0"},
+      {:opentelemetry_exporter, "~> 1.10"},
+      {:opentelemetry_logger_metadata, "~> 0.2.0"},
       {:tls_certificate_check, "~> 1.29"},
 
       # Prometheus metrics
+      {:prom_ex, "~> 1.11.0"},
       {:telemetry_metrics_prometheus_core, "~> 1.2"},
       {:telemetry_poller, "~> 1.3"},
 
       # Structured JSON logging
       {:logger_json, "~> 7.0"},
+      {:ex_aws, "~> 2.6"},
+      {:ex_aws_s3, "~> 2.5.8"},
+      {:hackney, "~> 1.20"},
+      {:sweet_xml, "~> 0.7.5"},
 
       # OpenAPI documentation
       {:open_api_spex, "~> 3.21"},

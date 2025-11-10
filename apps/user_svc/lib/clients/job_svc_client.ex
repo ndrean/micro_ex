@@ -20,11 +20,13 @@ defmodule Clients.JobSvcClient do
   - `{:ok, message}` on success
   - `{:error, reason}` on failure
   """
+  @spec convert_image(Mcsv.ImageConversionRequest.t()) ::
+          {:ok, binary()} | {:error, any()}
   def convert_image(%Mcsv.ImageConversionRequest{} = request) do
     request_binary = Mcsv.ImageConversionRequest.encode(request)
 
     Logger.info(
-      "[JobSvcClient] Requesting image conversion (#{byte_size(request_binary)} bytes with image_url)"
+      "[User][JobSvcClient] Requesting image conversion (#{byte_size(request_binary)} bytes with image_url)"
     )
 
     case post(job_base_url(), job_endpoints().convert_image, request_binary) do
@@ -32,11 +34,11 @@ defmodule Clients.JobSvcClient do
         {:ok, response_binary}
 
       {:ok, %{status: status}} ->
-        Logger.error("[JobSvcClient] HTTP #{status}")
+        Logger.error("[User][JobSvcClient] HTTP #{status}")
         {:error, "HTTP #{status}"}
 
       {:error, reason} ->
-        Logger.error("[JobSvcClient] Request failed: #{inspect(reason)}")
+        Logger.error("[User][JobSvcClient] Request failed: #{inspect(reason)}")
         {:error, reason}
     end
   end
@@ -51,24 +53,26 @@ defmodule Clients.JobSvcClient do
   - `{:ok, job_id}` on success
   - `{:error, reason}` on failure
   """
+  @spec enqueue_email(binary()) :: {:ok, binary()} | {:error, any()}
   def enqueue_email(user_request_binary) do
     case post(job_base_url(), job_endpoints().enqueue_email, user_request_binary) do
       {:ok, %{status: 200, body: response_binary}} ->
-        # {:ok, Mcsv.UserResponse.decode(response_binary) |> dbg()}
         {:ok, response_binary}
 
       {:ok, %{status: status, body: body}} ->
-        Logger.error("[JobSvcClient] HTTP #{status}: #{inspect(body)}")
+        Logger.error("[User][JobSvcClient] HTTP #{status}: #{inspect(body)}")
         {:error, "HTTP #{status}"}
 
       {:error, reason} ->
-        Logger.error("[JobSvcClient] Request failed: #{inspect(reason)}")
+        Logger.error("[User][JobSvcClient] Request failed: #{inspect(reason)}")
         {:error, reason}
     end
   end
 
   # Private HTTP helper
 
+  @spec post(binary(), binary(), binary(), keyword()) ::
+          {:ok, Req.Response.t()} | {:error, any()}
   defp post(base, path, body, opts \\ []) do
     receive_timeout = Keyword.get(opts, :receive_timeout, 30_000)
 
