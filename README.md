@@ -165,8 +165,8 @@ sequenceDiagram
     ObanJob ->> ObanJob: enqueue a Job <br> trigger async Worker
     ObanJob-->>+Image: do convert
     Image -->>Image: convert<br>S3 Storage<br>new presigned-URL
-    Image -->>Job: URL converted
-    Job ->>User: URL converted
+    Image -->>ObanJob: URL converted
+    ObanJob ->>User: URL converted
     User ->>Client: URL converted
 ```
 
