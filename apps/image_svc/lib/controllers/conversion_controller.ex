@@ -87,6 +87,9 @@ defmodule ConversionController do
 
   # Request processing
 
+  @spec decode_request(Plug.Conn.t()) ::
+          {:ok, Mcsv.V2.ImageConversionRequest.t(), Plug.Conn.t()}
+          | {:error, :decode_error}
   defp decode_request(conn) do
     with {:ok, binary_body, new_conn} <- Plug.Conn.read_body(conn),
          {:ok, request} <- maybe_decode_request(binary_body) do
@@ -110,6 +113,8 @@ defmodule ConversionController do
   r
   """
 
+  @spec maybe_decode_request(binary()) ::
+          {:ok, Mcsv.V2.ImageConversionRequest.t()} | {:error, :decode_error}
   def maybe_decode_request(binary_body) do
     try do
       %Mcsv.V2.ImageConversionRequest{} =
@@ -123,6 +128,8 @@ defmodule ConversionController do
     end
   end
 
+  @spec fetch_image(String.t()) ::
+          {:ok, binary()} | {:error, :fetch_failed, any()}
   defp fetch_image(image_url) do
     Logger.info("[Image][ConversionController] Fetching image: #{image_url}")
 
@@ -141,28 +148,11 @@ defmodule ConversionController do
     end
   end
 
-  # defp get_image_info(image_binary) do
-  #   case ImageConverter.get_image_info(image_binary) do
-  #     {:ok, info} ->
-  #       Logger.info(
-  #         "[Image][ConversionController] Image: #{info.format} #{info.width}x#{info.height}, #{info.size} bytes"
-  #       )
-
-  #       {:ok, info}
-
-  #     {:error, reason} ->
-  #       Logger.error(
-  #         inspect("[Image][ConversionController] Failed to get image info: #{inspect(reason)}")
-  #       )
-
-  #       {:error, :image_info_failed, reason}
-  #   end
-  # end
-
   defp bucket do
     Application.get_env(:image_svc, :image_bucket, "msvc-images")
   end
 
+  @spec build_s3_url(String.t(), String.t()) :: String.t()
   defp build_s3_url(bucket, key) do
     # Get MinIO endpoint from config
     s3_endpoint = Application.get_env(:ex_aws, :s3)[:host] || "localhost"
@@ -174,6 +164,10 @@ defmodule ConversionController do
 
   # Conversion workflow
 
+  @spec perform_conversion(
+          Mcsv.V2.ImageConversionRequest.t(),
+          binary()
+        ) :: {:ok, String.t(), String.t(), non_neg_integer()} | {:error, :conversion_failed}
   defp perform_conversion(request, image_binary) do
     opts =
       ImageSvc.ConversionOptions.build(
@@ -198,6 +192,9 @@ defmodule ConversionController do
     end
   end
 
+  @spec upload_binary_to_s3(binary(), String.t()) ::
+          {:ok, %{bucket: String.t(), key: String.t(), size: non_neg_integer()}}
+          | {:error, any()}
   defp upload_binary_to_s3(pdf_binary, bucket) do
     key = generate_storage_id()
     # Upload to S3
