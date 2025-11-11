@@ -166,7 +166,7 @@ sequenceDiagram
     ObanJob ->> ObanJob: enqueue a Job <br> trigger async Worker
     ObanJob-->>+Image: do convert
     Image -->> +S3: fetch binary
-    Image -->> Image: convert
+    Image -->> Image: convert<br> new presigned-URL
     Image -->>S3: save new presigned-URL
     Image -->>ObanJob: URL
     ObanJob ->>User: URL
