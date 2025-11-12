@@ -2,7 +2,23 @@
 
 This is a demo of **Phoenix-Elixir-based microservices** demonstrating PNG-to-PDF image conversion with email notifications. It is complete enough to understand the concepts used but not production code.
 
-The idea of this demo is to give an introduction of differents technics:
+## The Problem
+
+**Goal**: Build a system that delivers high-volume PNG-to-PDF conversion with email notifications.
+
+**Challenge**: Image conversion is CPU-intensive and can become a bottleneck. How do you know where the bottleneck is? How do you scale efficiently?
+
+**Answer**: **Observability is the key**. Before you can optimize or scale, you need to see:
+
+- Which service is slow? (traces)
+- How much CPU/memory is consumed? (metrics)
+- What errors occur and when? (logs)
+
+This demo shows how to instrument a microservices system with OpenTelemetry to gain these insights, then discusses practical scaling strategies based on what you observe.
+
+## What This Demo Covers
+
+The idea of this demo is to give an introduction to different techniques:
 
 - an OpenAPI design first,
 - protocol buffers contracts between services over HTTP/1.1,
@@ -15,12 +31,12 @@ We use quite a few technologies:
 - `Swoosh` for email delivery
 - `ExCmd` to stream `ImageMagick`
 - `MinIO` for S3 compatible local-cloud storage
-- `OpenTelemetry` with `Jaeger` and `Tempo` for traces (the later uses`MinIO` for back storage)
+- `OpenTelemetry` with `Jaeger` and `Tempo` for traces (the latter uses `MinIO` for backing storage)
 - `Promtail` with `Loki` linked to `MinIO` for logs
 - `Prometheus` for metrics
 - `Grafana` for global dashboards and `PromEx` to setup `Grafana` dashboards.
 
-> **About API design**: it is designed [API-first ➡ Code] as this aappears to be the best way to build APIs. The OpenAPI files define the _schemas_ which expose the protocol buffer contracts. The proto contracts provide strong type safety. They are rather easy to design (_as long as you don't use the full gRPC methods and transport protocol_) and enforces the contract-first approach. Routes follow a `Twirp`-like RPC DSL, with a format `/service_name/method_name` instead of traditional REST (`/resource`).
+> **About API design**: it is designed [API-first ➡ Code] as this appears to be the best way to build APIs. The OpenAPI files define the _schemas_ which expose the protocol buffer contracts. The proto contracts provide strong type safety. They are rather easy to design (_as long as you don't use the full gRPC methods and transport protocol_) and enforces the contract-first approach. Routes follow a `Twirp`-like RPC DSL, with a format `/service_name/method_name` instead of traditional REST (`/resource`).
 
 The main interest of this demo is to display a broad range of tools and orchestrate the observability tools with OpenTelemetry in `Elixir`.
 
@@ -293,9 +309,9 @@ The protobuf contract will implement these specs.
 
 The manual YAML specs are:
 
-- [client_svc.ymal](https://github.com/ndrean/micro_ex/blob/main/)openapi/client_svc.yaml) -- Client entrypoint (port 8085)
-- [user_svc.yaml]([https://github.com/ndrean/micro_ex/blob/main/)openapi/user_svc.yaml) - User Gateway service (port 8081)
-- [job_svc.yaml](https://github.com/ndrean/micro_ex/blob/main/openapi/job_svc.yaml) - Oban job queue service (port 8082)  
+- [client_svc.yaml](https://github.com/ndrean/micro_ex/blob/main/openapi/client_svc.yaml) -- Client entrypoint (port 8085)
+- [user_svc.yaml](https://github.com/ndrean/micro_ex/blob/main/openapi/user_svc.yaml) - User Gateway service (port 8081)
+- [job_svc.yaml](https://github.com/ndrean/micro_ex/blob/main/openapi/job_svc.yaml) - Oban job queue service (port 8082)
 - [email_svc.yaml](https://github.com/ndrean/micro_ex/blob/main/openapi/email_svc.yaml) - Email delivery service (port 8083)
 - [image_svc.yaml](https://github.com/ndrean/micro_ex/blob/main/openapi/image_svc.yaml) - Image processing service (port 8084)
 
@@ -752,7 +768,28 @@ Estimated People Required (organic) 5.83
 - 1oki aggregates logs from 5 or 5000 pods
 - Jaeger traces 5 or 50 microservices
 
-**Background Jobs & ImageService**: the Image service is CPU intensive, so you can use a loadbalancer between the Job Service and the Image(s) services. Then Oban cannot scale so RabbitMQ to distribute over all consumers.
+**Scaling the Image Conversion Service**:
+
+The observability stack revealed that image conversion is the bottleneck (CPU-bound). How to scale?
+
+**Practical scaling approach** (in order of implementation):
+
+1. **Scale Image service horizontally** (simplest, immediate impact):
+   - Add more Image service instances behind a load balancer
+   - Job service distributes conversion requests across instances
+   - No code changes needed
+
+2. **Scale Oban job processing** (if queue depth grows):
+   - Run multiple Job service instances sharing the same database
+   - Each instance processes jobs from the shared queue (Postgres or SQLite)
+   - Oban handles job distribution, retry logic, and persistence automatically
+
+**What you DON'T need** (for this use case):
+
+- **RabbitMQ**: Adds broker infrastructure without solving the CPU bottleneck. The bottleneck is image processing time, not message delivery. Oban's database-backed queue is sufficient.
+- **Service mesh**: Doesn't improve conversion throughput. The system doesn't need mTLS between 5 internal services or advanced traffic routing.
+
+**Result**: Horizontal scaling of Image service instances directly addresses the observed bottleneck with minimal complexity.
 
 **Production Optimization**:
 
@@ -782,16 +819,10 @@ Estimated People Required (organic) 5.83
     - Sample 10% of successful requests
     - Keep 100% of errors/warnings
 
-- Possible architecture Improvements
-- **Service mesh** (Istio/Linkerd):
-  - Automatic mTLS between services
-  - Circuit breaking and retries
-  - Traffic splitting for canary deployments
-
-- **Event sourcing** for job_svc:
-  - Replace Oban state transitions with event sourcing: RabbitMQ
-  - Better audit trail and replay capability
-  - See explanation below ⬇️
+- **Event sourcing** for audit trail:
+  - Capture all job state transitions as immutable events
+  - Enables replay and debugging of historical workflows
+  - Consider only if compliance requires full audit history
 
 ## Tests
 
@@ -876,7 +907,7 @@ Stream.interval(t)
 
 The usage of RPC-style endpoints (not RESTful API with dynamic segments) makes observability easier (no `:id` in static paths).
 
-Prometheus via `:promex`. We named "prometheus" the datasource name in the onfiguration file _prometheus.yml_  under the key `:uid`.
+Prometheus via `:promex`. We named "prometheus" the datasource name in the configuration file _prometheus.yml_ under the key `:uid`.
 
 ```sh
 mix prom_ex.gen.config --datasource prometheus
