@@ -2,15 +2,15 @@
 
 This is a demo of **Phoenix-Elixir-based microservices** demonstrating PNG-to-PDF image conversion with email notifications.
 
-The idea of this demo is to use:
+The idea of this demo is to give an introduction of differents technics:
 
 - an OpenAPI design first,
 - use protocol buffers contracts between services over HTTP/1.1,
-- instrument with OpenTelemetry to collect the three observables, namely logs, traces and metrics.
+- instrumentation with OpenTelemetry to collect the three observables, namely logs, traces and metrics.
 
-The system still uses quite a few technologies.
+We use quite a few technologies:
 
-- Protocol buffers for inter-service communication serialization with a compiled package-like installation
+- Protocol buffers (the Elixir `:protobuf` library) for inter-service communication serialization with a compiled package-like installation
 - background job processing (`Oban`) backed with the database `SQLite`
 - `Swoosh` for email delivery
 - `ExCmd` to stream `ImageMagick`
@@ -284,7 +284,8 @@ RUN mix compile
 4. **No manual copying**: Compiled `*.pb.ex` files are generated once and reused
 5. Build automation: No manual `protoc` commands
 6. Container-ready: Works in both dev and Docker environments
-7. **Higher level of integration**: check the following [blog from Andrea Leopardi](https://andrealeopardi.com/posts/sharing-protobuf-schemas-across-services/) about sharing protobuf across services. The author present a higher level vision of sharing protobuf schemas: produce a hex package and rely on the Hex package and the CI pipeline.
+
+You can have a higher or more robust level of integration; check the following [blog from Andrea Leopardi](https://andrealeopardi.com/posts/sharing-protobuf-schemas-across-services/) about sharing protobuf across services. The author present a higher level vision of sharing protobuf schemas: produce a hex package and rely on the Hex package and the CI pipeline.
 
 [<img src="https://github.com/ndrean/micro_ex/blob/main/priv/ALeopardi-share-protobuf.png" with="300">](https://andrealeopardi.com/posts/sharing-protobuf-schemas-across-services/)
 
@@ -396,7 +397,7 @@ sequenceDiagram
 - Oban retry logic for failed emails
 - Callback chain for status tracking
 
-Example of trace propagation via telemetry of the previsou flow:
+Example of trace propagation via telemetry of the email flow:
 
 <img src="https://github.com/ndrean/micro_ex/blob/main/priv/trace-email.png" alt="trace-email">
 
@@ -421,7 +422,7 @@ sequenceDiagram
     User ->>Client: URL
 ```
 
-Example of trace propagation via telemetry of the previsou flow:
+Example of trace propagation via telemetry of the image flow:
 
 <img src="https://github.com/ndrean/micro_ex/blob/main/priv/trace-image-convert.png" alt="trace-image">
 
@@ -490,35 +491,15 @@ title: Documentation
 
 The tools pictured above are designed to be used in a **container** context.
 
-| System     | Purpose                |
-| ---------- | ---------------------- |
-| Prometheus | Metrics scrapper       |
-| Loki       | Logs scrapper          |
-| Jaeger     | Traces collection      |
-| Grafana    | Reporting & Dashboards |
+| System     | Purpose                | Description                                                                                                                                                                                                                                    |
+| ---------- | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Prometheus | Metrics scrapper       | "How much CPU/memory/time?                                                                                                    "What's my p95 latency?" "How many requests per second?" "Is memory usage growing?" "Which endpoint is slowest?" |
+| Loki       | Logs scrapper          | Centralized logs from all services "Show me all errors in the last hour" "What did user X do?" "Find logs containing 'timeout'" "What happened before the crash?"                                                                              |
+| Jaeger     | Traces collection      | Full journey accross services "Which service is slow in this request?" "How does a request flow through services?" "Where did this request fail?" "What's the call graph?"                                                                     |
+| Grafana    | Reporting & Dashboards | Global view of the system                                                                                                                                                                                                                      |
 
-Some explanations about **who does what?**:
+How does this work?
 
-- METRICS: `Prometheus`
-  "How much CPU/memory/time?
-  "What's my p95 latency?"
-  "How many requests per second?"
-  "Is memory usage growing?"
-  "Which endpoint is slowest?"
-
-- LOGS: `Loki`
-  Centralized logs from all services
-  "Show me all errors in the last hour"
-  "What did user X do?"
-  "Find logs containing 'timeout'"
-  "What happened before the crash?"
-
-- TRACING: `Jaeger`
-  Full journey accross services
-  "Which service is slow in this request?"
-  "How does a request flow through services?"
-  "Where did this request fail?"
-  "What's the call graph?"
 
 | System            | Model                                       | Format                 | Storage                                        |
 | ----------------- | ------------------------------------------- | ---------------------- | ---------------------------------------------- |
@@ -530,7 +511,11 @@ Some explanations about **who does what?**:
 
 ### Trace pipeline
 
-In dev mode, `Jaeger` offers a UI frontend (whilst not `Tempo`).
+In dev mode, `Jaeger` offers a UI frontend (whilst not `Tempo`). 
+
+A view the services seen by Jaeger:
+
+<img src="https://github.com/ndrean/micro_ex/blob/main/priv/jaeger-flow.png" alt="jeager-flow">
 
 ```mermaid
 ---
@@ -730,7 +715,7 @@ Estimated People Required (organic) 5.65
 - 1oki aggregates logs from 5 or 5000 pods
 - Jaeger traces 5 or 50 microservices
 
-**Background Jobs & ImageService**: you cannot scale easily the ImageService with an ObanService.
+**Background Jobs & ImageService**: the Image service is CPU intensive, so you can use a loadbalancer between the Job Service and the Image(s) services. Then Oban cannot scale so RabbitMQ to distribute over all consumers.
 
 **Production Optimization**:
 
@@ -819,7 +804,7 @@ iex(client_svc@b6d94600b7e3)5>
       end)
    |> Stream.run()
 
-iex(client_svc@b6d94600b7e3)6> Stream.interate(50) |> Task.async_stream(fn _ -> Client.create(1) end, max_concurrenccy: 10, orderede: false) |> Stream.run()
+iex(client_svc@b6d94600b7e3)6> Stream.interval(100) |>Stream.take(1200) |> Task.async_stream(fn i -> ImageClient.convert_png("lib/client_svc-0.1.0/priv/test.png", "m#{i}@com") end, max_concurrenccy: 10, orderede: false) |> Stream.run()
 # :ok
 ```
 
@@ -837,6 +822,18 @@ iex(client_svc@b6d94600b7e3)6> Stream.interate(50) |> Task.async_stream(fn _ -> 
    - Tools: **K6**, **Locust**, **wrk**
    - Measure throughput, latency percentiles (p50, p95, p99)
    - Example: Can the system handle 1000 concurrent image conversions?
+
+```elixir
+t = 100
+
+Stream.interval(t) 
+|> Stream.take(1200)
+|> Task.async_stream(fn
+  i -> ImageClient.convert_png("my_image.png", "m#(i}@com") end, 
+  ordered: false, 
+  max_concurrency: 10
+) |> Stream.run()
+```
 
 ## Misc tips & tricks
 
@@ -868,3 +865,13 @@ Testing ImageMagick in container: create a PNG image 100x100 filled with red and
 ```sh
 docker exec msvc-image-svc sh -c 'magick -size 100x100 xc:red png:- | magick png:- -limit thread 10 -quality 95 -density 300 pdf:- 2>&1 | head -c 100'
 ```
+
+## Source
+
+<https://www.curiosum.com/blog/grafana-and-promex-with-phoenix-app>
+
+<https://dockyard.com/blog/2023/09/12/building-your-own-prometheus-metrics-with-promex>
+
+<https://dockyard.com/blog/2023/10/03/building-your-own-prometheus-metrics-with-promex-part-2>
+
+<https://hexdocs.pm/prom_ex/telemetry.html>

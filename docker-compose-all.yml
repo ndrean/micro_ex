@@ -40,6 +40,8 @@ services:
       - minio
       - jaeger
       - tempo
+      - loki
+      - promtail
     healthcheck:
       test: [ "CMD", "wget", "-q", "--spider", "http://127.0.0.1:${USER_SVC_PORT}/health" ]
       interval: 30s
@@ -94,6 +96,7 @@ services:
       - jaeger
       - tempo
       - loki
+      - promtail
     healthcheck:
       test: [ "CMD", "wget", "-q", "--spider", "http://127.0.0.1:${CLIENT_SVC_PORT}/health" ]
       interval: 30s
@@ -147,6 +150,8 @@ services:
       - minio
       - jaeger
       - tempo
+      - loki
+      - promtail
     healthcheck:
       test: [ "CMD", "wget", "-q", "--spider", "http://127.0.0.1:${JOB_SVC_PORT}/health" ]
       interval: 30s
@@ -194,6 +199,8 @@ services:
       - minio
       - jaeger
       - tempo
+      - loki
+      - promtail
     healthcheck:
       test: [ "CMD", "wget", "-q", "--spider", "http://127.0.0.1:${IMAGE_SVC_PORT}/health" ]
 
@@ -236,6 +243,8 @@ services:
     depends_on:
       - jaeger
       - tempo
+      - loki
+      - promtail
     healthcheck:
       test: [ "CMD", "wget", "-q", "--spider", "http://127.0.0.1:${EMAIL_SVC_PORT}/health" ]
       interval: 30s
@@ -280,20 +289,17 @@ services:
       - ${TEMPO_OTLP_HTTP_PORT:-4318}:4318 # OTLP HTTP receiver (fallback)
     command: -config.file=/etc/tempo/tempo.yml
     volumes:
-      - ./tempo/tempo.yml:/etc/tempo/tempo.yml
+      - ./configs/tempo/tempo.yml:/etc/tempo/tempo.yml
     tmpfs:
       - /tmp/tempo:mode=1777,size=1G # Temporary storage for WAL and cache (writable by all users)
     environment:
       - LOG_LEVEL=info
     depends_on:
       - minio-init # Wait for MinIO buckets
-    healthcheck:
-      test: [ "CMD", "wget", "--spider", "-q", "http://127.0.0.1:3200/ready" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+    # Note: Tempo image doesn't include wget/curl, so we skip healthcheck
+    # Tempo logs show "Tempo started" when ready
 
-  # Jaeger - Distributed tracing UI (better UX than Tempo, shares OTLP traces)
+    # Jaeger - Distributed tracing UI (better UX than Tempo, shares OTLP traces)
   jaeger:
     image: jaegertracing/all-in-one:latest
     container_name: msvc-jaeger
@@ -318,7 +324,7 @@ services:
     ports:
       - ${PROMETHEUS_UI_PORT}:9090 # Prometheus UI and API
     volumes:
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./configs/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
       - prometheus-data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
@@ -345,7 +351,7 @@ services:
       - ${LOKI_PORT}:3100 # Loki API
     command: -config.file=/etc/loki/config.yml
     volumes:
-      - ./loki/config.yml:/etc/loki/config.yml # Mount custom config with MinIO
+      - ./configs/loki/config.yml:/etc/loki/config.yml # Mount custom config with MinIO
       - loki-data:/loki
     depends_on:
       - minio-init # Wait for MinIO buckets to be initialized
@@ -362,7 +368,7 @@ services:
     ports:
       - "9080:9080" # Promtail HTTP
     volumes:
-      - ./promtail/config.yml:/etc/promtail/config.yml
+      - ./configs/promtail/config.yml:/etc/promtail/config.yml
       - /var/run/docker.sock:/var/run/docker.sock:ro # Read Docker container logs
     command: -config.file=/etc/promtail/config.yml
     depends_on:
@@ -380,8 +386,8 @@ services:
       - .env.staging
     volumes:
       - grafana-data:/var/lib/grafana
-      - ./grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ./configs/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./configs/grafana/dashboards:/var/lib/grafana/dashboards:ro
     depends_on:
       - loki
       - tempo
