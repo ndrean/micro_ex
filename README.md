@@ -4,13 +4,15 @@ This a toy **Phoenix-Elixir-based microservices** app demonstrating PNG-to-PDF i
 
 It is complete enough to understand the concepts used but not production code.
 
+[TODO]: deploy this example
+
 ## The Problem
 
 **Goal**: We want to build a system that delivers high-volume PNG-to-PDF conversion with email notifications.
 
 **Challenge**: Image conversion is CPU-intensive and can become a bottleneck. How do you know where the bottleneck is? How do you scale efficiently?
 
-**Anwser**: use a microservice architecture where **Observability is the key**.
+**Answer**: use a microservice architecture where **Observability is the key**.
 
 Before you can optimize or scale, you need to see:
 
@@ -80,7 +82,99 @@ docker exec -it msvc-client-svc bin/client_svc remote
 # iex(client_svc@ba41c71bacac)1> ImageClient.convert_png("my-image.png", "me@com")
 ```
 
+## OpenAPI Documentation
+
+### Design-First Workflow
+
+When you receive a ticket to implement an API, **start by defining the OpenAPI specification**. This follows the **API-design-first** approach, which is considered best practice for building maintainable APIs.
+
+**The workflow:**
+
+```text
+OpenAPI Design → Protobuf Implementation → Code
+```
+
+1. **Design Phase (OpenAPI)**: Define the HTTP API contract
+   - **Endpoints**: Specify paths, HTTP methods, and parameters
+   - **Schemas**: Define request/response body structures with validation rules
+   - **Documentation**: Add descriptions, examples, and error responses
+
+2. **Implementation Phase**: Translate the design into code
+   - **Protobuf contracts**: Implement the schemas as `.proto` messages for type-safe serialization
+   - **Endpoint handlers**: Build controllers that match the OpenAPI paths
+   - **Validation**: Ensure implementation matches the spec
+
+**Why this approach works:**
+
+- **OpenAPI** is ideal for design: human-readable, stakeholder-friendly, HTTP-native (status codes, headers, content types)
+- **Protobuf** is ideal for implementation: compile-time type safety, efficient binary serialization, language-agnostic
+- Both represent the **same data structures** in different formats (JSON Schema vs binary wire format)
+
+### API Style: Twirp-like RPC
+
+> Routes follow a `Twirp`-like RPC DSL with the format `/service_name/method_name` instead of traditional REST (`/resource`).
+
+This RPC-style simplifies observability (no dynamic path segments) and pairs naturally with protobuf's service/method semantics.
+
+**Example** ([email_svc.yaml](openapi/email_svc.yaml)):
+
+The OpenAPI schema defines the contract:
+
+```yaml
+paths:
+  /email_svc/send_email/v1:
+    post:
+      requestBody:
+        content:
+          application/protobuf:
+            schema:
+              $ref: '#/components/schemas/EmailRequest'
+
+components:
+  schemas:
+    EmailRequest:
+      properties:
+        user_id: string
+        user_name: string
+        user_email: string (format: email)
+        email_type: string (enum: [welcome, notification])
+```
+
+Which is then implemented as a protobuf contract ([libs/protos/proto_defs/V1/email.proto](libs/protos/proto_defs/V1/email.proto)):
+
+```proto
+message EmailRequest {
+  string user_id = 1;
+  string user_name = 2;
+  string user_email = 3;
+  string email_type = 4;
+  map<string, string> variables = 5;  // Additional fields for implementation
+}
+```
+
+The best introduction is to read [the OpenAPI spec](https://learn.openapis.org/specification/) and explore the examples in the [/openapi](openapi) folder.
+
+A view of an openapi spec YAML file (using the 42crunch extension):
+
+<img src="https://github.com/ndrean/micro_ex/blob/main/priv/openapi-vscode.png" alt="openapi">
+
+The manual YAML specs are:
+
+- [client_svc.yaml](https://github.com/ndrean/micro_ex/blob/main/openapi/client_svc.yaml) -- Client entrypoint (port 8085)
+- [user_svc.yaml](https://github.com/ndrean/micro_ex/blob/main/openapi/user_svc.yaml) - User Gateway service (port 8081)
+- [job_svc.yaml](https://github.com/ndrean/micro_ex/blob/main/openapi/job_svc.yaml) - Oban job queue service (port 8082)
+- [email_svc.yaml](https://github.com/ndrean/micro_ex/blob/main/openapi/email_svc.yaml) - Email delivery service (port 8083)
+- [image_svc.yaml](https://github.com/ndrean/micro_ex/blob/main/openapi/image_svc.yaml) - Image processing service (port 8084)
+
+We expose the documentation via a `SwaggerUI` container (port 8087). The container has a bind mount to the _/open_api_ folder.
+
+An example:
+
+<img src="https://github.com/ndrean/micro_ex/blob/main/priv/openapi-email-svc.png" alt="openapi-email">
+
 ## Protobuf
+
+Now that we've defined the HTTP API contracts with OpenAPI, let's see how the request/response schemas are implemented for efficient serialization between services.
 
 Why `protobuf`?
 
@@ -301,96 +395,6 @@ You can have a higher or more robust level of integration; check the following [
 
 [<img src="https://github.com/ndrean/micro_ex/blob/main/priv/ALeopardi-share-protobuf.png" with="300">](https://andrealeopardi.com/posts/sharing-protobuf-schemas-across-services/)
 
-## OpenAPI Documentation
-
-### Design-First Workflow
-
-When you receive a ticket to implement an API, **start by defining the OpenAPI specification**. This follows the **API-design-first** approach, which is considered best practice for building maintainable APIs.
-
-**The workflow:**
-
-```text
-OpenAPI Design → Protobuf Implementation → Code
-```
-
-1. **Design Phase (OpenAPI)**: Define the HTTP API contract
-   - **Endpoints**: Specify paths, HTTP methods, and parameters
-   - **Schemas**: Define request/response body structures with validation rules
-   - **Documentation**: Add descriptions, examples, and error responses
-
-2. **Implementation Phase**: Translate the design into code
-   - **Protobuf contracts**: Implement the schemas as `.proto` messages for type-safe serialization
-   - **Endpoint handlers**: Build controllers that match the OpenAPI paths
-   - **Validation**: Ensure implementation matches the spec
-
-**Why this approach works:**
-
-- **OpenAPI** is ideal for design: human-readable, stakeholder-friendly, HTTP-native (status codes, headers, content types)
-- **Protobuf** is ideal for implementation: compile-time type safety, efficient binary serialization, language-agnostic
-- Both represent the **same data structures** in different formats (JSON Schema vs binary wire format)
-
-### API Style: Twirp-like RPC
-
-> Routes follow a `Twirp`-like RPC DSL with the format `/service_name/method_name` instead of traditional REST (`/resource`).
-
-This RPC-style simplifies observability (no dynamic path segments) and pairs naturally with protobuf's service/method semantics.
-
-**Example** ([email_svc.yaml](openapi/email_svc.yaml)):
-
-The OpenAPI schema defines the contract:
-
-```yaml
-paths:
-  /email_svc/send_email/v1:
-    post:
-      requestBody:
-        content:
-          application/protobuf:
-            schema:
-              $ref: '#/components/schemas/EmailRequest'
-
-components:
-  schemas:
-    EmailRequest:
-      properties:
-        user_id: string
-        user_name: string
-        user_email: string (format: email)
-        email_type: string (enum: [welcome, notification])
-```
-
-Which is then implemented as a protobuf contract ([libs/protos/proto_defs/V1/email.proto](libs/protos/proto_defs/V1/email.proto)):
-
-```proto
-message EmailRequest {
-  string user_id = 1;
-  string user_name = 2;
-  string user_email = 3;
-  string email_type = 4;
-  map<string, string> variables = 5;  // Additional fields for implementation
-}
-```
-
-The best introduction is to read [the OpenAPI spec](https://learn.openapis.org/specification/) and explore the examples in the [/openapi](openapi) folder.
-
-A view of an openapi spec YAML file (using the 42crunch extension):
-
-<img src="https://github.com/ndrean/micro_ex/blob/main/priv/openapi-vscode.png" alt="openapi">
-
-The manual YAML specs are:
-
-- [client_svc.yaml](https://github.com/ndrean/micro_ex/blob/main/openapi/client_svc.yaml) -- Client entrypoint (port 8085)
-- [user_svc.yaml](https://github.com/ndrean/micro_ex/blob/main/openapi/user_svc.yaml) - User Gateway service (port 8081)
-- [job_svc.yaml](https://github.com/ndrean/micro_ex/blob/main/openapi/job_svc.yaml) - Oban job queue service (port 8082)
-- [email_svc.yaml](https://github.com/ndrean/micro_ex/blob/main/openapi/email_svc.yaml) - Email delivery service (port 8083)
-- [image_svc.yaml](https://github.com/ndrean/micro_ex/blob/main/openapi/image_svc.yaml) - Image processing service (port 8084)
-
-We expose the documentation via a `SwaggerUI` container (port 8087). The container has a bind mount to the _/open_api_ folder.
-
-An example:
-
-<img src="https://github.com/ndrean/micro_ex/blob/main/priv/openapi-email-svc.png" alt="openapi-email">
-
 ## Services Overview
 
 ```mermaid
@@ -508,9 +512,61 @@ Example of trace propagation via telemetry of the image flow:
 
 Now that we have our workflows, we want to add observability.
 
-Firtly a quote:
+Firstly a quote:
 
-> "Logs, metrics, and traces are often known as the three pillars of observability. While plainly having access to logs, metrics, and traces doesn’t necessarily make systems more observable, these are powerful tools that, if understood well, can unlock the ability to build better systems."
+> "Logs, metrics, and traces are often known as the three pillars of observability. While plainly having access to logs, metrics, and traces doesn't necessarily make systems more observable, these are powerful tools that, if understood well, can unlock the ability to build better systems."
+
+### Telemetry vs OpenTelemetry: Two Different Things
+
+Before diving in, it's important to understand the difference between **Erlang/Elixir Telemetry** and **OpenTelemetry**:
+
+#### Erlang/Elixir `:telemetry` (Local Event Bus)
+
+- **Purpose**: In-process event notification system for the BEAM VM
+- **Scope**: Single Elixir/Erlang application
+- **What it does**: Emits events locally (e.g., `[:phoenix, :endpoint, :start]`)
+- **Package**: [`:telemetry`](https://hexdocs.pm/telemetry/) library
+- **Use case**: Libraries (Phoenix, Ecto, Oban) emit events; you attach handlers to collect metrics
+
+**Example:**
+
+```elixir
+# Phoenix emits telemetry events
+:telemetry.execute([:phoenix, :endpoint, :stop], %{duration: 42}, %{route: "/api/users"})
+
+# You attach a handler to collect metrics
+:telemetry.attach("my-handler", [:phoenix, :endpoint, :stop], &handle_event/4, nil)
+```
+
+#### OpenTelemetry (Distributed Observability Standard)
+
+- **Purpose**: Industry-standard protocol for distributed tracing, metrics, and logs
+- **Scope**: Cross-service, multi-language, cloud-native systems
+- **What it does**: Propagates trace context across services, exports to observability backends (Jaeger, Prometheus, Grafana)
+- **Package**: [`:opentelemetry`](https://hexdocs.pm/opentelemetry/) + instrumentation libraries
+- **Use case**: Track requests flowing through multiple microservices
+
+**Example:**
+
+```elixir
+# OpenTelemetry creates spans that propagate across HTTP calls
+Tracer.with_span "user_svc.create_user" do
+  # This trace context is automatically propagated to downstream services
+  JobSvcClient.enqueue_email(user)
+end
+```
+
+#### How They Work Together in This Project
+
+1. **Erlang `:telemetry`** (local events) → Libraries emit events inside each service
+2. **`:opentelemetry_phoenix`** (bridge) → Subscribes to `:telemetry` events and converts them to OpenTelemetry spans
+3. **OpenTelemetry SDK** (exporter) → Sends spans to Jaeger/Tempo for distributed tracing
+4. **PromEx** (metrics) → Also subscribes to `:telemetry` events and exposes Prometheus metrics
+
+**Think of it this way:**
+
+- `:telemetry` = **local event bus** (within one service)
+- `OpenTelemetry` = **distributed tracing protocol** (across all services)
 
 We will only scratch the surface of observability.
 
@@ -578,7 +634,6 @@ The tools pictured above are designed to be used in a **container** context.
 
 How does this work?
 
-
 | System            | Model                                       | Format                 | Storage                                        |
 | ----------------- | ------------------------------------------- | ---------------------- | ---------------------------------------------- |
 | Prometheus        | PULL (scrape)                               | Plain text             | Disk (TimeSerieDB)                             |
@@ -589,7 +644,7 @@ How does this work?
 
 ### Trace pipeline
 
-In dev mode, `Jaeger` offers a UI frontend (whilst not `Tempo`). 
+`Jaeger` offers an excellent UI frontend tool to visualize the traces (whilst not `Tempo`).
 
 A view the services seen by Jaeger:
 
@@ -621,21 +676,154 @@ flowchart TD
     UI-->|:16686|J
 ```
 
-> If you run  locally with Docker, you can use the Docker daemon and use a `loki` driver to read and push the logs from stdout (in the docker socket) to Loki.
+### Logs pipeline
 
-> We used instead `Promtail` to consume the logs and push them to Loki. This solution is more K8 ready.
+Logs are the foundation of observability. Understanding how they flow from your code to Grafana is crucial.
 
-> To use a local `loki` driver, we need to isntall it:
+#### How Logs Are Produced and Collected
 
-```sh
-docker plugin install grafana/loki-docker-driver:latest --alias loki --grant-all-permissions
+**1. Code → Elixir Logger (Async)**
+
+Logs are produced in your code using Elixir's built-in `Logger` macro (you `require Logger`):
+
+```elixir
+Logger.info("User created", user_id: user.id)
+Logger.error("Failed to convert image", error: reason)
+Logger.warning("High memory usage detected")
 ```
+
+The Elixir `Logger` macrois **asynchronous** and runs in a separate process managed by the BEAM VM. This prevents logging from blocking your application code, as opposed to `IO.puts` which is a direct call.
+
+**2. Logger → stdout (OS)**
+
+The Logger eventually writes to **stdout** (standard output), which is captured by the operating system. In containerized environments, this goes to Docker's logging system.
+
+**3. Promtail → Loki (Log Aggregation)**
+
+`Promtail` is a log shipping agent that:
+
+- **Listens** to stdout from all containers
+- **Parses** log lines and extracts labels (service name, log level, etc.)
+- **Batches** log entries for efficiency
+- **Pushes** them to Loki via HTTP
+
+**4. Loki → Grafana (Query & Visualization)**
+
+`Loki` stores logs and makes them queryable. Grafana connects to Loki to:
+
+- Search logs by service, time range, or text
+- Correlate logs with traces and metrics
+- Create alerts based on log patterns
+
+```mermaid
+flowchart LR
+    Code[Your Code<br>Logger.info/error/warning]
+    Logger[Elixir Logger<br>Async Process]
+    Stdout[stdout<br>OS/Docker]
+    Promtail[Promtail<br>Log Shipper]
+    Loki[Loki<br>Log Aggregator]
+    Grafana[Grafana<br>Visualization]
+
+    Code -->|emit| Logger
+    Logger -->|write| Stdout
+    Stdout -->|scrape| Promtail
+    Promtail -->|HTTP push| Loki
+    Loki -->|query| Grafana
+```
+
+**Alternative: Docker Loki Driver**
+
+> If you run locally with Docker, you can use the Docker daemon with a `loki` driver to read and push logs from stdout (via the Docker socket) directly to Loki.
+>
+> We used `Promtail` instead because it's more Kubernetes-ready and provides more control over log parsing and labeling.
+>
+> To use the Docker Loki driver locally:
+>
+> ```sh
+> docker plugin install grafana/loki-docker-driver:latest --alias loki --grant-all-permissions
+> ```
+
+### Metrics pipeline
+
+Metrics provide quantitative measurements of your system's performance and health. Understanding how metrics flow from your services to Grafana completes the observability picture.
+
+#### How Metrics Are Produced and Collected
+
+**1. Code → Erlang `:telemetry` Events**
+
+Metrics start as `:telemetry` events emitted by libraries (Phoenix, Ecto, Oban) and custom code:
+
+```elixir
+# Phoenix automatically emits telemetry events
+# [:phoenix, :endpoint, :stop] with measurements: %{duration: 42_000_000}
+
+# You can also emit custom events
+:telemetry.execute([:image_svc, :conversion, :complete], %{duration_ms: 150}, %{format: "png"})
+```
+
+**2. PromEx → Prometheus Metrics**
+
+`PromEx` subscribes to `:telemetry` events and converts them to Prometheus-compatible metrics:
+
+- **Counters**: Total requests, errors (always increasing)
+- **Gauges**: Current memory usage, active connections (can go up/down)
+- **Histograms**: Request duration distribution, image size buckets
+- **Summaries**: Latency percentiles (p50, p95, p99)
+
+**3. Prometheus → Scraping (PULL Model)**
+
+Unlike logs and traces (which are pushed), Prometheus **pulls** metrics:
+
+- Every 15 seconds, Prometheus scrapes `GET /metrics` from each service
+- PromEx exposes this endpoint via `PromEx.Plug`
+- Returns plain text in Prometheus format:
+
+```text
+# TYPE http_requests_total counter
+http_requests_total{method="POST",route="/email_svc/send_email/v1"} 1523
+
+# TYPE http_request_duration_seconds histogram
+http_request_duration_seconds_bucket{le="0.1"} 1200
+http_request_duration_seconds_bucket{le="0.5"} 1500
+```
+
+**4. Prometheus → Grafana (Query & Visualization)**
+
+Grafana queries Prometheus using PromQL to create dashboards:
+
+- Time-series graphs: CPU usage over time
+- Rate calculations: Requests per second
+- Aggregations: P95 latency across all services
+- Alerts: Memory usage > 80%
+
+```mermaid
+flowchart LR
+    Code[Your Code<br>+ Libraries]
+    Telemetry[Erlang :telemetry<br>Event Bus]
+    PromEx[PromEx<br>Metrics Exporter]
+    Endpoint[/metrics endpoint<br>Plain Text]
+    Prometheus[Prometheus<br>Time Series DB]
+    Grafana[Grafana<br>Dashboards]
+
+    Code -->|emit events| Telemetry
+    Telemetry -->|subscribe| PromEx
+    PromEx -->|expose| Endpoint
+    Endpoint -->|GET every 15s<br>PULL model| Prometheus
+    Prometheus -->|PromQL queries| Grafana
+```
+
+**Key Differences from Logs & Traces:**
+
+- **Model**: PULL (Prometheus scrapes) vs PUSH (logs/traces sent actively)
+- **Format**: Plain text `key=value` pairs vs JSON/Protobuf
+- **Storage**: Time-series database optimized for aggregations
+- **Purpose**: Quantitative trends over time vs individual events/requests
 
 ## OpenTelemetry
 
 ### Setup
 
-We use `Phoenix` and `Req`.
+We use `Phoenix` and `Req` who emits telemetry events.
 
 **dependencies**: a bunch to add (`PromEx` is for Grafana dashboards for collect Beam metrics and more generally Prometheus metrics in a custom designed dashboard)
 
@@ -686,8 +874,6 @@ def application do
     ]
   end
 ```
-
-
 
 In _endpoint.ex_, check that you have:
 
@@ -791,7 +977,9 @@ Task.async(fn ->
 end)
 ```
 
-### PromEx for Grafana dashboards
+### PromEx Configuration and Dashboards
+
+As described in the [Metrics pipeline](#metrics-pipeline) section above, PromEx converts `:telemetry` events into Prometheus metrics. This section covers the practical configuration and dashboard setup.
 
 We setup two custom plugins and each has its own Grafana dashboard:
 
