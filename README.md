@@ -1296,19 +1296,6 @@ architecture-beta
 
   ```
 
-  Use the test image included in the client container:
-
-  ```sh
-  iex(client_svc@b6d94600b7e3)6> 
-    Stream.interval(100) 
-    |>Stream.take(1200) 
-    |> Task.async_stream(fn 
-      i -> ImageClient.convert_png("lib/client_svc-0.1.0/priv/test.png", "m#{i}@com") end, max_concurrenccy: 10, 
-      orderede: false
-    ) 
-    |> Stream.run()
-  ```
-
   Build an image using the embedded library `Vix` for testing:
 
   ```sh
@@ -1333,20 +1320,31 @@ architecture-beta
    - Example: Upload PNG → verify PDF in MinIO → check email sent
 
 6. **Load/Performance Tests** (On-demand):
-   - Tools: **K6**, **Locust**, **wrk**
+   - Tools: [K6](https://grafana.com/docs/k6/latest/using-k6/http-requests/),  [wrk](https://github.com/wg/wrk)
    - Measure throughput, latency percentiles (p50, p95, p99)
-   - Example: Can the system handle 1000 concurrent image conversions?
+   - Example: Can it handle 1_000 concurrent image conversions? Can the system handle being hammered every 100ms? ven before having measured tests, we can check with our observability tools how the system performs, like with the following tests:
 
   ```elixir
-  t = 100
+  ex(client_svc@b6d94600b7e3)6>
+  up = 1_000
 
-  Stream.interval(t) 
-  |> Stream.take(1200)
+  1..up
+  |> Enum.to_list()
   |> Task.async_stream(fn
     i -> ImageClient.convert_png("my_image.png", "m#(i}@com") end, 
     ordered: false, 
     max_concurrency: 10
   ) |> Stream.run()
+
+
+    Stream.interval(100) 
+    |>Stream.take(1200) 
+    |> Task.async_stream(fn 
+      i -> ImageClient.convert_png("lib/client_svc-0.1.0/priv/test.png", "m#{i}@com") end, 
+      max_concurrenccy: 10, 
+      ordered: false
+    ) 
+    |> Stream.run()
   ```
 
 ## Sources
