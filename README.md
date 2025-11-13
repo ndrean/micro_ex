@@ -1,16 +1,20 @@
 # Discover Microservices with Elixir with Observability
 
-This is a demo of **Phoenix-Elixir-based microservices** demonstrating PNG-to-PDF image conversion with email notifications. It is complete enough to understand the concepts used but not production code.
+This a toy **Phoenix-Elixir-based microservices** app demonstrating PNG-to-PDF image conversion with email notifications.
+
+It is complete enough to understand the concepts used but not production code.
 
 ## The Problem
 
-**Goal**: Build a system that delivers high-volume PNG-to-PDF conversion with email notifications.
+**Goal**: We want to build a system that delivers high-volume PNG-to-PDF conversion with email notifications.
 
 **Challenge**: Image conversion is CPU-intensive and can become a bottleneck. How do you know where the bottleneck is? How do you scale efficiently?
 
-**Answer**: **Observability is the key**. Before you can optimize or scale, you need to see:
+**Anwser**: use a microservice architecture where **Observability is the key**.
 
-- Which service is slow? (traces)
+Before you can optimize or scale, you need to see:
+
+- Which step/service is slow? (traces)
 - How much CPU/memory is consumed? (metrics)
 - What errors occur and when? (logs)
 
@@ -18,27 +22,25 @@ This demo shows how to instrument a microservices system with OpenTelemetry to g
 
 ## What This Demo Covers
 
-The idea of this demo is to give an introduction to different techniques:
+The main interest of this demo is to display a broad range of tools and orchestrate the observability tools with OpenTelemetry in `Elixir`.
 
-- an OpenAPI design first,
+It gives an introduction to different techniques:
+
+- an [OpenAPI Design first](https://learn.openapis.org/best-practices.html) approach,
 - protocol buffers contracts between services over HTTP/1.1,
-- instrumentation with OpenTelemetry and PromEx to collect the three observables, logs, traces and metrics.
+- instrumentation with `OpenTelemetry` and PromEx to collect the three observables, logs, traces and metrics.
 
 We use quite a few technologies:
 
 - Protocol buffers (the Elixir `:protobuf` library) for inter-service communication serialization with a compiled package-like installation
 - background job processing (`Oban`) backed with the database `SQLite`
-- `Swoosh` for email delivery
-- `ExCmd` to stream `ImageMagick`
-- `MinIO` for S3 compatible local-cloud storage
+- an email library (`Swoosh`)
+- a process runner `ExCmd` to stream `ImageMagick`
+- S3 compatible local-cloud storage `MinIO`
 - `OpenTelemetry` with `Jaeger` and `Tempo` for traces (the latter uses `MinIO` for backing storage)
 - `Promtail` with `Loki` linked to `MinIO` for logs
 - `Prometheus` for metrics
 - `Grafana` for global dashboards and `PromEx` to setup `Grafana` dashboards.
-
-> **About API design**: it is designed [API-first ➡ Code] as this appears to be the best way to build APIs. The OpenAPI files define the _schemas_ which expose the protocol buffer contracts. The proto contracts provide strong type safety. They are rather easy to design (_as long as you don't use the full gRPC methods and transport protocol_) and enforces the contract-first approach. Routes follow a `Twirp`-like RPC DSL, with a format `/service_name/method_name` instead of traditional REST (`/resource`).
-
-The main interest of this demo is to display a broad range of tools and orchestrate the observability tools with OpenTelemetry in `Elixir`.
 
 ## Prerequisites
 
@@ -301,11 +303,79 @@ You can have a higher or more robust level of integration; check the following [
 
 ## OpenAPI Documentation
 
-You receive a ticket to implement an API. You start by defining the OpenAPISpecs.
+### Design-First Workflow
 
-The OpenAPI specs document the HTTP interface and schemas (contracts).
+When you receive a ticket to implement an API, **start by defining the OpenAPI specification**. This follows the **API-design-first** approach, which is considered best practice for building maintainable APIs.
 
-The protobuf contract will implement these specs.
+**The workflow:**
+
+```text
+OpenAPI Design → Protobuf Implementation → Code
+```
+
+1. **Design Phase (OpenAPI)**: Define the HTTP API contract
+   - **Endpoints**: Specify paths, HTTP methods, and parameters
+   - **Schemas**: Define request/response body structures with validation rules
+   - **Documentation**: Add descriptions, examples, and error responses
+
+2. **Implementation Phase**: Translate the design into code
+   - **Protobuf contracts**: Implement the schemas as `.proto` messages for type-safe serialization
+   - **Endpoint handlers**: Build controllers that match the OpenAPI paths
+   - **Validation**: Ensure implementation matches the spec
+
+**Why this approach works:**
+
+- **OpenAPI** is ideal for design: human-readable, stakeholder-friendly, HTTP-native (status codes, headers, content types)
+- **Protobuf** is ideal for implementation: compile-time type safety, efficient binary serialization, language-agnostic
+- Both represent the **same data structures** in different formats (JSON Schema vs binary wire format)
+
+### API Style: Twirp-like RPC
+
+> Routes follow a `Twirp`-like RPC DSL with the format `/service_name/method_name` instead of traditional REST (`/resource`).
+
+This RPC-style simplifies observability (no dynamic path segments) and pairs naturally with protobuf's service/method semantics.
+
+**Example** ([email_svc.yaml](openapi/email_svc.yaml)):
+
+The OpenAPI schema defines the contract:
+
+```yaml
+paths:
+  /email_svc/send_email/v1:
+    post:
+      requestBody:
+        content:
+          application/protobuf:
+            schema:
+              $ref: '#/components/schemas/EmailRequest'
+
+components:
+  schemas:
+    EmailRequest:
+      properties:
+        user_id: string
+        user_name: string
+        user_email: string (format: email)
+        email_type: string (enum: [welcome, notification])
+```
+
+Which is then implemented as a protobuf contract ([libs/protos/proto_defs/V1/email.proto](libs/protos/proto_defs/V1/email.proto)):
+
+```proto
+message EmailRequest {
+  string user_id = 1;
+  string user_name = 2;
+  string user_email = 3;
+  string email_type = 4;
+  map<string, string> variables = 5;  // Additional fields for implementation
+}
+```
+
+The best introduction is to read [the OpenAPI spec](https://learn.openapis.org/specification/) and explore the examples in the [/openapi](openapi) folder.
+
+A view of an openapi spec YAML file (using the 42crunch extension):
+
+<img src="https://github.com/ndrean/micro_ex/blob/main/priv/openapi-vscode.png" alt="openapi">
 
 The manual YAML specs are:
 
@@ -315,9 +385,7 @@ The manual YAML specs are:
 - [email_svc.yaml](https://github.com/ndrean/micro_ex/blob/main/openapi/email_svc.yaml) - Email delivery service (port 8083)
 - [image_svc.yaml](https://github.com/ndrean/micro_ex/blob/main/openapi/image_svc.yaml) - Image processing service (port 8084)
 
-We expose the documentation via a `SwaggerUI` container (port 8087).
-
-The container has a bind mount to the _/open_api_ folder.
+We expose the documentation via a `SwaggerUI` container (port 8087). The container has a bind mount to the _/open_api_ folder.
 
 An example:
 
@@ -730,6 +798,86 @@ We setup two custom plugins and each has its own Grafana dashboard:
 - One to monitor the OS metrics using `Polling.build()`,
 - and one to monitor the Image conversion process using `Event.build()`.
 
+#### Datasource Configuration
+
+For PromEx dashboards to work correctly, the datasource identifier must match across three locations:
+
+1. **Grafana datasource definition** ([o11y_configs/grafana/provisioning/datasources/datasources.yml:6](o11y_configs/grafana/provisioning/datasources/datasources.yml#L6)):
+
+   ```yaml
+   datasources:
+     - name: Prometheus
+       type: prometheus
+       uid: prometheus  # ← This identifier
+   ```
+
+2. **PromEx dashboard configuration** in each service ([apps/user_svc/lib/user_svc/prom_ex.ex:81](apps/user_svc/lib/user_svc/prom_ex.ex#L81)):
+
+   ```elixir
+   def dashboard_assigns do
+     [
+       datasource_id: "prometheus",  # ← Must match the uid above
+       default_selected_interval: "30s"
+     ]
+   end
+   ```
+
+3. **Dashboard export command** (using the `--datasource` flag):
+
+   ```sh
+   mix prom_ex.gen.config --datasource prometheus
+   ```
+
+**Key points:**
+
+- The `uid` in Grafana's datasource config must match `datasource_id` in PromEx
+- This links exported dashboards to the correct Prometheus datasource
+- Respect Grafana folder structure: _grafana/provisioning/{datasources,dashboards,plugins,notifiers}_
+
+#### Generate and Export Dashboards
+
+PromEx provides pre-built Grafana dashboards that visualize metrics from your services. These dashboards are **exported as JSON files** and automatically loaded by Grafana on startup.
+
+**What the commands do:**
+
+1. **`mix prom_ex.gen.config --datasource prometheus`**
+   - Generates PromEx configuration with the specified datasource identifier
+   - Ensures your service's metrics queries use the correct Prometheus datasource
+
+2. **`mix prom_ex.dashboard.export`**
+   - Exports PromEx's built-in dashboard templates as JSON files
+   - Available dashboards:
+     - `application.json` - Application metrics (uptime, version, dependencies)
+     - `beam.json` - Erlang VM metrics (processes, memory, schedulers)
+     - `phoenix.json` - Phoenix framework metrics (requests, response times)
+   - The JSON files are saved to `o11y_configs/grafana/dashboards/`
+
+3. **Grafana auto-loads these dashboards** via the provisioning config ([o11y_configs/grafana/provisioning/dashboards/dashboards.yml:13](o11y_configs/grafana/provisioning/dashboards/dashboards.yml#L13)):
+
+   ```yaml
+   options:
+     path: /var/lib/grafana/dashboards  # Grafana reads JSON files from this directory
+   ```
+
+**Example commands:**
+
+```sh
+# Generate config for a single service
+cd apps/user_svc
+mix prom_ex.gen.config --datasource prometheus
+mix prom_ex.dashboard.export --dashboard application.json --module UserSvc.PromEx --file_path ../../o11y_configs/grafana/dashboards/user_svc_application.json
+
+# Batch export for all services
+for service in job_svc image_svc email_svc client_svc; do
+  cd apps/$service
+  mix prom_ex.dashboard.export --dashboard application.json --module "$(echo $service | sed 's/_\([a-z]\)/\U\1/g' | sed 's/^./\U&/').PromEx" --stdout > ../../o11y_configs/grafana/dashboards/${service}_application.json
+  mix prom_ex.dashboard.export --dashboard beam.json --module "$(echo $service | sed 's/_\([a-z]\)/\U\1/g' | sed 's/^./\U&/').PromEx" --stdout > ../../o11y_configs/grafana/dashboards/${service}_beam.json
+  cd ../..
+done
+```
+
+**Result:** Each service gets its own dashboard in Grafana showing application and BEAM VM metrics.
+
 The sources at the end are a good source of explanation on how to do this.
 
 ## COCOMO Complexity Analysis of this project
@@ -827,54 +975,58 @@ The observability stack revealed that image conversion is the bottleneck (CPU-bo
 ## Tests
 
 1. **Static Analysis** (100% - every file save):
-   - Credo, Dialyzer, ExDoc
+   - Credo, Dialyzer
 
 2. **Unit Tests** (70% of test suite):
    - Test individual functions in isolation
    - Fast (<1ms per test), no external dependencies
-   - Example: Test `ImageSvc.convert_to_pdf/2` with mock files
 
 3. **Integration Tests** (20% of test suite):
    - Test multiple modules working together
    - May use real database (SQLite in your case)
-   - Example: Test Oban job enqueuing → worker execution → email delivery
+   - Example: Test `ImageSvc.convert_to_pdf/2` with mock files
 
-Connect to the "msvc-client-svc" container and get an IEX session to run commands:
+  Connect to the "msvc-client-svc" container and get an IEX session to run commands:
 
-```sh
-docker exec -it msvc-client-svc bin/client_svc remote
+  ```sh
+  docker exec -it msvc-client-svc bin/client_svc remote
+  ```
 
-iex(client_svc@b6d94600b7e3)4> 
-   Enum.to_list(1..1000) 
-   |> Task.async_stream(fn i -> Client.create(i) end, max_concurrency: 10, ordered: false) 
-   |> Stream.run
+  Email testing:
 
+  ```sh
+  iex(client_svc@b6d94600b7e3)4> 
+    Enum.to_list(1..1000) 
+    |> Task.async_stream(fn i -> Client.create(i) end, max_concurrency: 10, ordered: false) 
+    |> Stream.run
 
-iex(client_svc@b6d94600b7e3)5>
-   List.duplicate("lib/client_svc-0.1.0/priv/test.png", 100) 
-   |> Task.async_stream(
-         fn file -> ImageClient.convert_png(file, "m@com") 
-      end)
-   |> Stream.run()
+  ```
 
-iex(client_svc@b6d94600b7e3)6> 
-  Stream.interval(100) 
-  |>Stream.take(1200) 
-  |> Task.async_stream(fn 
-    i -> ImageClient.convert_png("lib/client_svc-0.1.0/priv/test.png", "m#{i}@com") end, max_concurrenccy: 10, 
-    orderede: false
-  ) 
-  |> Stream.run()
+  Use the test image included in the client container:
 
-iex(client_svc@b6d94600b7e3)7>
-  File.cd!("lib/client_svc-0.1.0/priv")
-  {:ok, img} = Vix.Vips.Operation.worley(5000, 5000)
-  :ok = Vix.Vips.Image.write_to_file(img, "big-test.png")
-  File.read!("big-test.png") |> byte_size()
-  ImageClient.convert_png("big-test.png", "me@com")
+  ```sh
+  iex(client_svc@b6d94600b7e3)6> 
+    Stream.interval(100) 
+    |>Stream.take(1200) 
+    |> Task.async_stream(fn 
+      i -> ImageClient.convert_png("lib/client_svc-0.1.0/priv/test.png", "m#{i}@com") end, max_concurrenccy: 10, 
+      orderede: false
+    ) 
+    |> Stream.run()
+  ```
 
-# :ok
-```
+  Build an image using the embedded library `Vix` for testing:
+
+  ```sh
+
+  iex(client_svc@b6d94600b7e3)7>
+    File.cd!("lib/client_svc-0.1.0/priv")
+    {:ok, img} = Vix.Vips.Operation.worley(5000, 5000)
+    :ok = Vix.Vips.Image.write_to_file(img, "big-test.png")
+    ImageClient.convert_png("big-test.png", "me@com")
+
+  # :ok
+  ```
 
 4. **Contract Tests** (Service boundaries):
    - Verify Protobuf message compatibility between services
@@ -891,50 +1043,19 @@ iex(client_svc@b6d94600b7e3)7>
    - Measure throughput, latency percentiles (p50, p95, p99)
    - Example: Can the system handle 1000 concurrent image conversions?
 
-```elixir
-t = 100
+  ```elixir
+  t = 100
 
-Stream.interval(t) 
-|> Stream.take(1200)
-|> Task.async_stream(fn
-  i -> ImageClient.convert_png("my_image.png", "m#(i}@com") end, 
-  ordered: false, 
-  max_concurrency: 10
-) |> Stream.run()
-```
+  Stream.interval(t) 
+  |> Stream.take(1200)
+  |> Task.async_stream(fn
+    i -> ImageClient.convert_png("my_image.png", "m#(i}@com") end, 
+    ordered: false, 
+    max_concurrency: 10
+  ) |> Stream.run()
+  ```
 
-## Misc tips & tricks
-
-The usage of RPC-style endpoints (not RESTful API with dynamic segments) makes observability easier (no `:id` in static paths).
-
-Prometheus via `:promex`. We named "prometheus" the datasource name in the configuration file _prometheus.yml_ under the key `:uid`.
-
-```sh
-mix prom_ex.gen.config --datasource prometheus
-
-mix prom_ex.dashboard.export --dashboard application.json --module UserSvc.PromEx --file_path ../../grafana/dashboards/user_svc_application.json
-
-for service in job_svc image_svc email_svc client_svc; do
-  cd apps/$service
-  mix prom_ex.dashboard.export --dashboard application.json --module "$(echo $service | sed 's/_\([a-z]\)/\U\1/g' | sed 's/^./\U&/').PromEx" --stdout > ../../grafana/dashboards/${service}_application.json
-  mix prom_ex.dashboard.export --dashboard beam.json --module "$(echo $service | sed 's/_\([a-z]\)/\U\1/g' | sed 's/^./\U&/').PromEx" --stdout > ../../grafana/dashboards/${service}_beam.json
-  cd ../..
-done
-```
-
-- protobuf: set `pass: ["application/protobuf"]` in the Plug.Parsers in the module _router.ex_ .
-- follow trace async/Oban worker: add "_otel_trace_context" to your Oban job args
-- PromEx datasource: use the value in datasource.name (and uid) for /grafana/provisioning/datasources/datasources.yml, and in /prom_ex.ex/ dashboard_assigns()[:datasource]
-- generate the standard Promex dshboards.
-- respect Grafana folder structure: _grafana/provisioning/{datasources,dashboards,plugins,notifiers}_.
-
-Testing ImageMagick in container: create a PNG image 100x100 filled with red and pipe into te command.
-
-```sh
-docker exec msvc-image-svc sh -c 'magick -size 100x100 xc:red png:- | magick png:- -limit thread 10 -quality 95 -density 300 pdf:- 2>&1 | head -c 100'
-```
-
-## Source
+## Sources
 
 <https://www.curiosum.com/blog/grafana-and-promex-with-phoenix-app>
 
