@@ -4,7 +4,12 @@ This a toy **Phoenix-Elixir-based microservices** app demonstrating PNG-to-PDF i
 
 It is complete enough to understand the concepts used but not production code.
 
-[TODO]: deploy this example
+It works on Docker as an API. The Elixir containers/services can be reached via _remote_  sessions and the observability services are reachable in the browser (port mapping in _.env.example_).
+
+[TODO]
+
+- build an interactive (T?)UI to run Elixir commands and reach easily all of the exposed services,
+- deploy this example on Debian VPS (and change to Debian based images instead of Alpine)
 
 ## The Problem
 
