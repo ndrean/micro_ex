@@ -44,14 +44,15 @@ defmodule ImageClient do
       iex> ImageClient.convert_png("test.png", "user@example.com")
       %Mcsv.V2.UserResponse{ok: true, message: "Image conversion job enqueued..."}
   """
-  def convert_png(png_path, user_email, opts \\ []) do
+
+  def convert_png(png_binary, user_email, opts \\ []) do
     # Create a root span for this client-initiated operation
     Tracer.with_span "image_client.convert_png", %{kind: :client} do
       Tracer.set_attribute("user.email", user_email)
-      Tracer.set_attribute("image.path", png_path)
+      # Tracer.set_attribute("image.path", png_path)
 
       # Read PNG file
-      png_binary = File.read!(png_path)
+      # png_binary = File.read!(png_path)
       png_size = byte_size(png_binary)
       Tracer.set_attribute("image.size_bytes", png_size)
 

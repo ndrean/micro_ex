@@ -16,15 +16,6 @@ config :opentelemetry,
   traces_exporter: :otlp,
   resource: %{service: "image_svc"}
 
-# processors: [
-#   otel_batch_processor: %{
-#     exporter: :otlp
-#     # exporter: %{
-#     # endpoints: [{:grpc, otelcollector_host, otel_collector__port, []}]
-#     # }
-#   }
-# ]
-
 config :opentelemetry_ecto, :tracer, repos: [ImageService.Repo]
 
 # Add service name to all logs

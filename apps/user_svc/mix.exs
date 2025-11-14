@@ -21,13 +21,11 @@ defmodule UserSvc.MixProject do
     [
       user_svc: [
         applications: [
-          user_svc: :permanent,
           opentelemetry_exporter: :permanent,
           opentelemetry: :temporary
         ],
         # include_erts: true,
-        include_executables_for: [:unix],
-        strip_beams: false
+        include_executables_for: [:unix]
         # steps: [:assemble, &Bakeware.assemble/1],
         # compiler_options: [
         #   # Remove debug info
@@ -69,7 +67,7 @@ defmodule UserSvc.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:protos, path: "../../libs/protos"},
+      {:libcluster, "~> 3.5"},
       {:phoenix, "~> 1.8.1"},
       {:bandit, "~> 1.8"},
       {:plug, "~> 1.18"},
@@ -77,6 +75,7 @@ defmodule UserSvc.MixProject do
 
       # serializers
       {:jason, "~> 1.4"},
+      {:protos, path: "../../libs/protos"},
       {:protobuf, "~> 0.15.0"},
 
       # S3/MinIO client
@@ -103,7 +102,7 @@ defmodule UserSvc.MixProject do
       {:logger_json, "~> 7.0"},
 
       # OpenAPI documentation
-      {:open_api_spex, "~> 3.21"},
+      # {:open_api_spex, "~> 3.21"},
 
       # static tests
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},

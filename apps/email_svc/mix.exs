@@ -32,12 +32,11 @@ defmodule EmailSvc.MixProject do
     [
       email_svc: [
         applications: [
-          email_svc: :permanent,
           opentelemetry_exporter: :permanent,
           opentelemetry: :temporary
         ],
-        include_executables_for: [:unix],
-        strip_beams: false
+        # only :unix
+        include_executables_for: [:unix]
       ]
     ]
   end
@@ -58,12 +57,15 @@ defmodule EmailSvc.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:protos, path: "../../libs/protos"},
+      {:libcluster, "~> 3.5"},
       {:phoenix, "~> 1.8.1"},
       {:req, "~> 0.5.15"},
       {:bandit, "~> 1.8"},
+      # email client
       {:swoosh, "~> 1.19.8"},
+      # serializers
       {:jason, "~> 1.4"},
+      {:protos, path: "../../libs/protos"},
       {:protobuf, "~> 0.15.0"},
 
       # Telemetry, OpenTelemetry for distributed tracing
@@ -86,7 +88,7 @@ defmodule EmailSvc.MixProject do
       {:logger_json, "~> 7.0"},
 
       # OpenAPI documentation
-      {:open_api_spex, "~> 3.21"},
+      # {:open_api_spex, "~> 3.21"},
       # inspect
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},

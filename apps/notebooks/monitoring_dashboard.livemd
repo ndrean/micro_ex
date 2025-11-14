@@ -1,0 +1,292 @@
+# LiveBook Monitoring Dashboard
+
+```elixir
+Mix.install([
+  {:vix, "~> 0.35.0"},
+  {:req, "~> 0.5.16"},
+  {:kino, "~> 0.17.0"}
+])
+```
+
+## Setup
+
+## Dashboard Grid Layout
+
+```elixir
+# Create a grid of mini dashboards
+Kino.Layout.grid([
+  Kino.Markdown.new("### [Jaeger](http://localhost:16686)\nDistributed Tracing"),
+  Kino.Markdown.new("### [Grafana](http://localhost:3000)\nUnified Observability"),
+  Kino.Markdown.new("### [Prometheus](http://localhost:9090)\nMetrics & Alerts"),
+  Kino.Markdown.new("### [Swagger](http://localhost:8087)\nAPI Documentation"),
+  Kino.Markdown.new("### [MinIO](http://localhost:9001)\nObject Storage"),
+  Kino.Markdown.new("### [Livebook](http://localhost:8090)\nInteractive Notebooks")
+], columns: 3)
+```
+
+## Connect to Cluster
+
+```elixir
+# Set cookie to match your services
+Node.set_cookie(:msvc_dev_cookie_change_in_production)
+
+services_map = %{
+  client: :"client_svc@client_svc.msvc_default", 
+  user: :"user_svc@user_svc.msvc_default",
+  job: :"job_svc@job_svc.msvc_default",
+  email: :"email_svc@email_svc.msvc_default",
+  image: :"image_svc@image_svc.msvc_default",
+}
+
+# Connect to services
+services = [
+  :"client_svc@client_svc.msvc_default",
+  :"user_svc@user_svc.msvc_default",
+  :"job_svc@job_svc.msvc_default",
+  :"image_svc@image_svc.msvc_default",
+  :"email_svc@email_svc.msvc_default"
+]
+
+results =
+  Map.values(services_map)
+  |> Enum.map(fn node ->
+      case Node.connect(node) do
+        true -> [{:connected, node}] 
+        false ->[ { :failed, node} ]
+        :ignored -> [{:ignored, node}] 
+      end
+    end)
+
+Kino.DataTable.new(results, keys: [:connected, :failed, :ignored])
+```
+
+## Health checks
+
+#### Query "/health" endpoints of all the Elixir services from Docker
+
+```elixir
+defmodule HealthCheck do
+  def check_all do
+    services = [
+      {"user_svc", 8081},
+      {"job_svc", 8082},
+      {"email_svc", 8083},
+      {"image_svc", 8084},
+      {"client_svc", 8085},
+
+    ]
+
+    services
+    |> Enum.map(fn {name, port} ->
+      url = "http://host.docker.internal:#{port}/health"
+
+      status =
+        case Req.get(url, retry: false, connect_options: [timeout: 1000]) do
+          {:ok, %{status: 200}} -> "🟢 Healthy"
+          {:ok, %{status: status}} -> "🟡 #{status}"
+          {:error, _} -> "🔴 Down"
+        end
+
+      %{
+        service: name,
+        port: port,
+        status: status,
+        url: url
+      }
+    end)
+  end
+end
+
+# Initial check
+timestamp = DateTime.utc_now() |> DateTime.to_string()
+frame = Kino.Frame.new() |> Kino.render()
+health = HealthCheck.check_all()
+table = Kino.DataTable.new(health)
+Kino.Frame.append(frame, table)
+
+
+# Update every 10 seconds
+Stream.interval(10_000)
+|> Stream.take(10)
+|> Kino.animate(fn _-> 
+  health = HealthCheck.check_all()
+  Kino.DataTable.update(table, health) 
+  Kino.Frame.render(frame, table)
+end)
+
+```
+
+## ERPC calls to check the services
+
+```elixir
+node_info =
+  Map.values(services_map)
+  |> Enum.map(fn node ->
+      elixir_version = :erpc.call(node, System, :version, [])
+      otp_release = :erpc.call(node, :erlang, :system_info, [:otp_release]) |> to_string()
+      uptime = :erpc.call(node, :erlang, :statistics, [:wall_clock]) |> elem(0)
+      uptime_hours = Float.round(uptime / 1000 / 60 / 60, 2)
+
+      %{
+        node: node,
+        elixir: elixir_version,
+        otp: otp_release,
+        uptime_hours: uptime_hours,
+        status: "🟢 Online"
+      }
+  end)
+
+Kino.DataTable.new(node_info)
+```
+
+## Email flow
+
+```elixir
+fqdn_client = services_map.client
+create = fn i -> :erpc.call(fqdn_client, Client, :create, [i]) end
+
+create.(1)
+```
+
+#### Hammer the services via the Email flow
+
+```elixir
+up_to = 500
+
+  
+Enum.to_list(1..up_to)
+|> Task.async_stream(fn i -> create.(i) end)
+|> Stream.run()
+```
+
+## Image flow
+
+#### Create a small image:
+
+```elixir
+{:ok, img} = Vix.Vips.Operation.worley(1000, 1000)
+{:ok, bin_png}  = Vix.Vips.Image.write_to_buffer(img, ".png")
+```
+
+#### Test the image flow
+
+```elixir
+convert = fn bin, i -> 
+  :erpc.call(fqdn_client, ImageClient, :convert_png, [bin, "m#{i}@com"])
+end
+
+convert.(bin_png, 1)
+```
+
+#### Image Stress tests
+
+##### Run every 100ms
+
+```elixir
+int = 100
+nb = 100
+
+Stream.interval(int)
+|> Stream.take(nb)
+|> Task.async_stream(fn i -> convert.(bin_png, i) end,
+  ordered: false,
+  max_concurrency: 10)
+|> Stream.run()
+```
+
+#### Hammer concurrently via image flow
+
+```elixir
+1..nb
+|> Enum.to_list()
+|> Stream.take(nb)
+|> Task.async_stream(fn i -> convert.(bin_png, i) end,
+  ordered: false,
+  max_concurrency: 10)
+|> Stream.run()
+```
+
+## Interactive Dashboard Selector
+
+```elixir
+dashboard_options = [
+  {"Jaeger - Distributed Tracing", "http://localhost:16686"},
+  {"Grafana - Unified Observability", "http://host.docker.internal:3000"},
+  {"Prometheus - Metrics", "http://host.docker.internal:9090"},
+  {"Swagger - API Docs", "http://host.docker.internal:8087"},
+  {"MinIO Console - Object Storage", "http://host.docker.internal:9001"}
+]
+
+selected = Kino.Input.select("Select Dashboard:", dashboard_options)
+Kino.render(selected)
+
+iframe_frame = Kino.Frame.new()
+
+selected
+|> Kino.listen(fn %{value: url} ->
+  iframe_html = """
+  <iframe
+    src="#{url}"
+    width="100%"
+    height="800px"
+    style="border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+  </iframe>
+  """
+
+  Kino.Frame.render(iframe_frame, Kino.HTML.new(iframe_html))
+end)
+
+iframe_frame
+```
+
+```elixir
+Req.get!("http://host.docker.internal:8087").body
+```
+
+## Remote Process Inspector
+
+```elixir
+# Select a node to inspect
+options = [client: "Client", user: "User", job: "Job", image: "Image", email: "Email"]
+node_selector = Kino.Input.select("Select Node:",options )
+
+Kino.render(node_selector)
+
+
+result_frame = Kino.Frame.new()
+
+node_selector
+|> Kino.Control.stream()
+|> Kino.listen(fn evt -> 
+  node = Map.get(services_map, evt.value) 
+  if node do
+    # Get process information
+    process_count = :erpc.call(node, :erlang, :system_info, [:process_count])
+    memory = :erpc.call(node, :erlang, :memory, [])
+    memory_mb = (memory[:total] / 1024 / 1024) |> Float.round(2)
+
+    
+
+    info_md = """
+    ### Node: #{node}
+
+    - **Process Count:** #{process_count}
+    - **Total Memory:** #{memory_mb} MB
+    - **Total Memory (bytes):** #{memory[:total]}
+    - **Atom Memory:** #{Float.round(memory[:atom] / 1024 / 1024, 2)} MB
+    - **Binary Memory:** #{Float.round(memory[:binary] / 1024 / 1024, 2)} MB
+    - **ETS Memory:** #{Float.round(memory[:ets] / 1024 / 1024, 2)} MB
+    """
+
+    Kino.Frame.render(result_frame, Kino.Markdown.new(info_md))
+  end
+  
+  
+end)
+  
+
+#inspect_button
+
+
+result_frame
+```

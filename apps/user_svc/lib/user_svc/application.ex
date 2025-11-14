@@ -18,12 +18,29 @@ defmodule UserSvc.Application do
 
     children = [
       UserSvc.PromEx,
+      {Cluster.Supervisor, [topologies(), [name: UserSvc.Application.ClusterSupervisor]]},
       UserSvcWeb.Telemetry,
       UserSvcWeb.Endpoint
     ]
 
     opts = [strategy: :one_for_one, name: UserSvc.Supervisor]
     Supervisor.start_link(children, opts)
+  end
+
+  defp topologies do
+    [
+      msvc_cluster: [
+        strategy: Cluster.Strategy.Epmd,
+        config: [
+          hosts: [
+            :"user_svc@user_svc.msvc_default",
+            :"job_svc@job_svc.msvc_default",
+            :"image_svc@image_svc.msvc_default",
+            :"email_svc@email_svc.msvc_default"
+          ]
+        ]
+      ]
+    ]
   end
 
   defp ensure_minio_bucket do

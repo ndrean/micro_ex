@@ -31,13 +31,11 @@ defmodule ImageSvc.MixProject do
     [
       image_svc: [
         applications: [
-          image_svc: :permanent,
           opentelemetry_exporter: :permanent,
           opentelemetry: :temporary
         ],
         # include_erts: true,
-        include_executables_for: [:unix],
-        strip_beams: false
+        include_executables_for: [:unix]
         # steps: [:assemble, &Bakeware.assemble/1],
         # compiler_options: [
         # Remove debug info
@@ -67,13 +65,16 @@ defmodule ImageSvc.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:protos, path: "../../libs/protos"},
+      {:libcluster, "~> 3.5"},
       {:bandit, "~> 1.8"},
       {:phoenix, "~> 1.8.1"},
       {:plug, "~> 1.16"},
       {:req, "~> 0.5.15"},
-      {:protobuf, "~> 0.15.0"},
+      # serializers
       {:jason, "~> 1.4"},
+      {:protos, path: "../../libs/protos"},
+      {:protobuf, "~> 0.15.0"},
+      # process runner
       {:ex_cmd, "~> 0.16.0"},
 
       # OpenTelemetry for distributed tracing (exporter MUST be before opentelemetry)

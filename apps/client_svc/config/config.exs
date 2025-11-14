@@ -24,6 +24,3 @@ config :opentelemetry,
   span_processor: :batch,
   traces_exporter: :otlp,
   resource: %{service: "client_svc"}
-
-# metrics_exporter: :otlp,
-# service_name: "client_svc",

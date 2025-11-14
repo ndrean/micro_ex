@@ -2,12 +2,15 @@
 # Build context MUST be the repo root: docker build -f apps/user_svc/Dockerfile .
 # Stage 1: Build the release
 ARG PORT=8081
+ARG SERVICE=user_svc
 ARG OS=alpine:3.22.2
 ARG ELIXIR_IMAGE=hexpm/elixir:1.19.2-erlang-28.1-alpine-3.22.2
 FROM ${ELIXIR_IMAGE} AS builder
 
 ARG PORT
 ENV PORT=${PORT}
+ARG SERVICE
+ENV SERVICE=${SERVICE}
 
 # Install build dependencies + protoc for proto compilation
 RUN apk add --no-cache \
@@ -29,11 +32,11 @@ RUN mix local.hex --force && \
 COPY libs/protos libs/protos/
 
 # Copy user_svc dependency files
-COPY apps/user_svc/mix.exs apps/user_svc/mix.lock apps/user_svc/
-COPY apps/user_svc/config/config.exs apps/user_svc/config/prod.exs apps/user_svc/config/
+COPY apps/${SERVICE}/mix.exs apps/${SERVICE}/mix.lock apps/${SERVICE}/
+COPY apps/${SERVICE}/config/config.exs apps/${SERVICE}/config/prod.exs apps/${SERVICE}/config/
 
-# Set working directory to user_svc
-WORKDIR /app/apps/user_svc
+# Set working directory to SERVICE
+WORKDIR /app/apps/${SERVICE}
 
 # Install dependencies (will compile protos lib automatically)
 ENV MIX_ENV=prod
@@ -44,8 +47,9 @@ RUN mix escript.install --force hex protobuf
 ENV PATH="/root/.mix/escripts:${PATH}"
 
 # Copy application code
-COPY apps/user_svc/lib ./lib
-COPY apps/user_svc/config/runtime.exs config/
+COPY apps/${SERVICE}/lib ./lib
+COPY apps/${SERVICE}/rel ./rel
+COPY apps/${SERVICE}/config/runtime.exs config/
 
 # Compile application (protos will be compiled as dependency)
 RUN mix compile
@@ -58,6 +62,8 @@ FROM ${OS} AS app
 
 ARG PORT
 ENV PORT=${PORT}
+ARG SERVICE
+ENV SERVICE=${SERVICE}
 
 # Install runtime dependencies
 RUN apk add --no-cache \
@@ -74,8 +80,10 @@ RUN addgroup -g 1000 appuser && \
 WORKDIR /app
 
 # Copy release from builder (built in /app/apps/user_svc)
-COPY --from=builder --chown=appuser:appuser /app/apps/user_svc/_build/prod/rel/user_svc ./
+COPY --from=builder --chown=appuser:appuser /app/apps/${SERVICE}/_build/prod/rel/${SERVICE} ./
 
+# Create database directory with proper permissions before USER switch
+RUN mkdir -p /app/db && chown -R appuser:appuser /app/db
 # Switch to non-root user
 USER appuser
 
@@ -87,4 +95,5 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD ["/bin/sh", "-c", "wget -q --spider http://localhost:${PORT}/health || exit 1"]
 
 # Start the application
-CMD ["bin/user_svc", "start"]
+# CMD ["bin/user_svc", "start"]
+CMD ["/bin/sh", "-c", "bin/${SERVICE} start"]

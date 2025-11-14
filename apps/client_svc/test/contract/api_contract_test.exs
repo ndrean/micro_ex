@@ -32,10 +32,8 @@ defmodule UserService.Contract.APIContractTest do
     # Validate against OpenAPI spec
     assert response.status == 200, "Expected 200 OK as per OpenAPI spec"
 
-    dbg(spec["paths"])
-
     path_spec = spec["paths"]["/user_svc/CreateUser"]
-    expected_status = path_spec["post"]["responses"]["200"] |> dbg()
+    expected_status = path_spec["post"]["responses"]["200"]
 
     response_data = Mcsv.UserResponse.decode(response.body)
     %Mcsv.UserResponse{} = response_data

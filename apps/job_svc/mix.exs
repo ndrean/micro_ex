@@ -21,7 +21,6 @@ defmodule JobSvc.MixProject do
     [
       job_svc: [
         applications: [
-          job_svc: :permanent,
           opentelemetry_exporter: :permanent,
           opentelemetry: :temporary
         ],
@@ -58,11 +57,13 @@ defmodule JobSvc.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:protos, path: "../../libs/protos"},
+      {:libcluster, "~> 3.5"},
       {:phoenix, "~> 1.8"},
       {:bandit, "~> 1.8"},
       {:req, "~> 0.5.15"},
+      # serializers
       {:jason, "~> 1.4"},
+      {:protos, path: "../../libs/protos"},
       {:protobuf, "~> 0.15.0"},
       #  Background jobs
       {:oban, "~> 2.20"},
@@ -87,7 +88,7 @@ defmodule JobSvc.MixProject do
       {:logger_json, "~> 7.0"},
 
       # OpenAPI documentation
-      {:open_api_spex, "~> 3.21"},
+      # {:open_api_spex, "~> 3.21"},
 
       # MinIO / S3 (for cleanup worker)
       {:ex_aws, "~> 2.5"},

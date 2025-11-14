@@ -22,12 +22,10 @@ defmodule ClientSvc.MixProject do
     [
       client_svc: [
         applications: [
-          client_svc: :permanent,
           opentelemetry_exporter: :permanent,
           opentelemetry: :temporary
         ],
-        include_executables_for: [:unix],
-        strip_beams: false
+        include_executables_for: [:unix]
       ]
     ]
   end
@@ -59,18 +57,15 @@ defmodule ClientSvc.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:protos, path: "../../libs/protos"},
+      {:libcluster, "~> 3.5"},
       {:phoenix, "~> 1.8"},
       {:bandit, "~> 1.8"},
       {:plug, "~> 1.18"},
       {:req, "~> 0.5.15"},
-      {:ecto_sql, "~> 3.10"},
-      {:postgrex, ">= 0.0.0"},
-      {:oban, "~> 2.15"},
       # serializer
       {:jason, "~> 1.4"},
+      {:protos, path: "../../libs/protos"},
       {:protobuf, "~> 0.15.0"},
-      # {:telemetry, "~> 1.3"},
       {:opentelemetry_phoenix, "~> 2.0"},
       {:opentelemetry_bandit, "~> 0.3.0"},
       {:opentelemetry_exporter, "~> 1.10"},
@@ -81,17 +76,12 @@ defmodule ClientSvc.MixProject do
 
       # Prometheus metrics
       {:prom_ex, "~> 1.11.0"},
+      # {:telemetry, "~> 1.3"},
       {:telemetry_metrics_prometheus_core, "~> 1.2"},
       {:telemetry_poller, "~> 1.3"},
 
       # Structured JSON logging
       {:logger_json, "~> 7.0"},
-
-      # OpenAPI documentation
-      {:open_api_spex, "~> 3.21"},
-
-      # testing
-      {:vix, "~> 0.35"},
 
       # static tests
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},

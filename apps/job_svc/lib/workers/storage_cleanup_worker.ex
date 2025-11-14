@@ -64,7 +64,6 @@ defmodule StorageCleanupWorker do
       |> Enum.filter(&should_delete?(&1.key, cutoff_time))
       |> Enum.map(&delete_object/1)
       |> Enum.count(fn result -> result == :ok end)
-      |> dbg()
 
     Logger.info("[Job][StorageCleanup] Deleted #{deleted_count} old files")
     :ok

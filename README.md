@@ -6,7 +6,14 @@ It is complete enough to understand the concepts used but not production code.
 
 It works on Docker as an API. The Elixir containers/services can be reached via _remote_  sessions and the observability services are reachable in the browser (port mapping in _.env.example_).
 
-[TODO] Deploy with a Livebook launcher.
+- Livebook launcher: <http://localhost:8090>
+  
+[TODO]: setup as an app
+
+<img src="https://github.com/ndrean/micro_ex/blob/main/priv/Livebook.png" alt="livebook">
+
+- [Services guide](https://github.com/ndrean/micro_ex/blob/main/SERVICES.md)
+- [Docker clustering guide](https://github.com/ndrean/micro_ex/blob/main/DOCKER_CLUSTERING.md)
 
 ## Table of Contents
 
