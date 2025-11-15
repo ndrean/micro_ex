@@ -4,17 +4,18 @@ This a toy **Phoenix-Elixir-based microservices** app demonstrating PNG-to-PDF i
 
 It is complete enough to understand the concepts used but not production code.
 
-It works on Docker as an API with a LiveBook UI to reach the services which have been distributed.
+It works on Docker as an API with a LiveBook UI to reach the services which have been distributed (_DOCKER_CLUSTERING.md_).
 
-In practice, you can reach any Elixir containers/services via _remote_  sessions and the observability services are reachable in the browser (port mapping _SERVICES.md_).
+In practice, you can reach any Elixir containers/services via _remote_  sessions and run `:erpc.call()`. The observability services are reachable in the browser (port mapping _SERVICES.md_).
 
-However, we added a LiveBook with BEAM distribution as this facilitates a lot interaction with the microservices (_DOCKER_CLUSTERING.md_).
+However, we added a LiveBook with BEAM distribution as this facilitates a lot; you have a nice code runner cells and build a tiny UI as shown below to reach the observables UIs.
 
-You experience the "endpoints hell" (discovery, hardcoded mapping everywhere). OpenAPI documentation and Observability are first-class citizens in such projects and are key to help.
 
 - [Livebook launcher](https://github.com/ndrean/micro_ex/blob/main/apps/notebooks/monitoring_dashboard.livemd): <http://localhost:8090>
   
 <img src="https://github.com/ndrean/micro_ex/blob/main/priv/Livebook.png" alt="livebook">
+
+You might experience the "endpoints hell" (discovery, hardcoded mapping everywhere). **OpenAPI documentation** and **Observability** are first-class citizens in such projects and are key to help.
 
 - [Services guide](https://github.com/ndrean/micro_ex/blob/main/SERVICES.md)
 - [Docker clustering guide](https://github.com/ndrean/micro_ex/blob/main/DOCKER_CLUSTERING.md)
@@ -1262,22 +1263,18 @@ The observability stack revealed that image conversion is the bottleneck (CPU-bo
 architecture-beta
     service cf(cloud)[CloudFlare]
     group vps(cloud)[VPS]
-    group o11y(cloud)[Observability] in vps
+    group o11y(cloud)[O11Y] in vps
     service gate(cloud)[Gateway Caddy] in vps
     service lvb(server)[LiveBook] in vps
     group api(cloud)[API] in vps
-    service client(server)[Client] in api
-    service user(server)[Services] in api
+    service services(server)[User Job Image Email] in api
     service db(database)[Database] in api
     service miniio(cloud)[S3 Storage] in api
     service j(server)[Jaeger Grafana Prometheus] in o11y
 
-    
-
     cf:R -- L:gate
     gate:R -- L:lvb
-    lvb:R -- L:client
-    client:T -- B:user
+    lvb:R -- L:services
     lvb:T -- B:j
   ```
 
