@@ -19,7 +19,7 @@ You experience the "endpoints hell" (discovery, hardcoded mapping everywhere). O
 - [Services guide](https://github.com/ndrean/micro_ex/blob/main/SERVICES.md)
 - [Docker clustering guide](https://github.com/ndrean/micro_ex/blob/main/DOCKER_CLUSTERING.md)
 
-> In a separate _nats_ branch, we will migrate to use [NATS.IO](https://docs.nats.io/) via the [gnat package](https://github.com/nats-io/nats.ex) to address this endpoint management with a different paradigm (event driven pattern) and rethink the architecture while still using protobuf schemas. Kubernetes uses this.
+> In a separate _nats_ branch, we will migrate to use [NATS.IO](https://docs.nats.io/) via the [gnat package](https://github.com/nats-io/nats.ex) to address this endpoint management with a different paradigm (event driven pattern) and rethink the architecture while still using protobuf schemas. NATS is a popular choice for communication layer between services running in Kubernetes.
 
 ## Table of Contents
 
@@ -67,6 +67,7 @@ You experience the "endpoints hell" (discovery, hardcoded mapping everywhere). O
   - [Production Considerations](#production-considerations)
   - [Enhancement?](#enhancement)
   - [Tests](#tests)
+    - [Manual Testing Examples](#manual-testing-examples)
   - [Sources](#sources)
 
 ## The Problem
@@ -1217,6 +1218,8 @@ The observability stack revealed that image conversion is the bottleneck (CPU-bo
 
 **Result**: Horizontal scaling of Image service instances directly addresses the observed bottleneck with minimal complexity.
 
+**What you COULD use**: `NATS.IO` (branch _nats_) is a response to the "endpoint hell" and use an event like pattern with push/subscribe. Furthermore, we have the issue of a long HTTP connection - vulnerable to timeouts - between the Worker and the Image operation (fetch from S3, conver to PDF, save to S3, return URL). Oban retries the entire Job if fails. `JetStream` can address this with persistent streams (messages are stored and replayed if processing fails), acknowledgment-based retries, at-least-once delivery. Furthermore, JetStream can address the **idempotency** that we did not handle here, both for emails and image conversion; we do not want to resend an email twice nor resend and replay an imamge conversion twice if something breaks and is retried in the worker flow.
+
 **Production Optimization**:
 
 - Use managed services (Datadog, New Relic, Grafana Cloud) to eliminate self-hosting
@@ -1280,84 +1283,58 @@ architecture-beta
 
 ## Tests
 
-1. **Static Analysis** (100% - every file save):
-   - Credo, Dialyzer
+Recommended testing strategy for microservices architectures:
 
-2. **Unit Tests** (70% of test suite):
-   - Test individual functions in isolation
-   - Fast (<1ms per test), no external dependencies
+- Static Analysis
+- Unit Tests. Example: Test that `S3.generate_presigned_url/2` returns a valid URL string with correct expiration timestamp
+- Integration Tests (multiple modules working together within a single service, may use real external dependencies. Example: test that `ImageSvc.convert_to_pdf/1` fetches from S3, converts the image, and saves the result back to S3
+- Contract Tests (Service boundaries). Verify that services communicate correctly using the agreed protobuf schemas. Tools like [Pact](https://docs.pact.io/) (consumer-driven contracts). Example: Verify that `job_svc` can successfully decode the `EmailRequest` protobuf message sent by `user_svc`
+- Property-Based Tests (Edge cases). Test that functions hold true for random generated inputs, catching edge cases you didn't think of. Tools: [StreamData](https://hexdocs.pm/stream_data/). Example: Test that `decode(encode(x)) == x` for any randomly generated protobuf struct, ensuring serialization round-trips correctly
+- End-to-End (E2E) Tests. Test complete workflows across all services with real infrastructure (Docker containers). Example: POST a PNG to `client_svc`, verify PDF appears in MinIO, and confirmation email is sent via Swoosh
+- Load/Performance Tests. Measure system behavior under realistic production load. Tools: [K6](https://grafana.com/docs/k6/latest/), [wrk](https://github.com/wg/wrk). Example: Verify the system can handle 1,000 concurrent image conversions without degrading p95 latency below 500ms
 
-3. **Integration Tests** (20% of test suite):
-   - Test multiple modules working together
-   - May use real database (SQLite in your case)
-   - Example: Test `ImageSvc.convert_to_pdf/2` with mock files
+### Manual Testing Examples
 
-  Connect to the "msvc-client-svc" container and get an IEX session to run commands:
+**Connect to a service container:**
 
-  ```sh
-  docker exec -it msvc-client-svc bin/client_svc remote
-  ```
+```sh
+docker exec -it msvc-client-svc bin/client_svc remote
+```
 
-  Email testing:
+**Test bulk email sending (1000 concurrent requests):**
 
-  ```sh
-  iex(client_svc@b6d94600b7e3)4> 
-    Enum.to_list(1..1000) 
-    |> Task.async_stream(fn i -> Client.create(i) end, max_concurrency: 10, ordered: false) 
-    |> Stream.run
+```elixir
+iex(client_svc@container)>
+1..1000
+|> Task.async_stream(fn i -> Client.create(i) end, max_concurrency: 10, ordered: false)
+|> Stream.run()
+```
 
-  ```
+**Test image conversion with generated test image:**
 
-  Build an image using the embedded library `Vix` for testing:
+```elixir
+iex(client_svc@container)>
+File.cd!("lib/client_svc-0.1.0/priv")
+{:ok, img} = Vix.Vips.Operation.worley(5000, 5000)
+:ok = Vix.Vips.Image.write_to_file(img, "big-test.png")
+ImageClient.convert_png("big-test.png", "test@example.com")
+```
 
-  ```sh
+**Load test (sustained throughput):**
 
-  iex(client_svc@b6d94600b7e3)7>
-    File.cd!("lib/client_svc-0.1.0/priv")
-    {:ok, img} = Vix.Vips.Operation.worley(5000, 5000)
-    :ok = Vix.Vips.Image.write_to_file(img, "big-test.png")
-    ImageClient.convert_png("big-test.png", "me@com")
+```elixir
+iex(client_svc@container)>
+Stream.interval(100)  # Every 100ms
+|> Stream.take(1200)  # 2 minutes worth
+|> Task.async_stream(
+  fn i -> ImageClient.convert_png("test.png", "user#{i}@example.com") end,
+  max_concurrency: 10,
+  ordered: false
+)
+|> Stream.run()
+```
 
-  # :ok
-  ```
-
-4. **Contract Tests** (Service boundaries):
-   - Verify Protobuf message compatibility between services
-   - Tools: **Pact** (consumer-driven contracts)
-   - Example: `user_svc` expects `job_svc` to accept `EmailRequest` with fields `user_id`, `user_email`
-
-5. **End-to-End (E2E) Tests** (5% of test suite):
-   - Full workflow across all services
-   - Slow, brittle, but catches integration bugs
-   - Example: Upload PNG → verify PDF in MinIO → check email sent
-
-6. **Load/Performance Tests** (On-demand):
-   - Tools: [K6](https://grafana.com/docs/k6/latest/using-k6/http-requests/),  [wrk](https://github.com/wg/wrk)
-   - Measure throughput, latency percentiles (p50, p95, p99)
-   - Example: Can it handle 1_000 concurrent image conversions? Can the system handle being hammered every 100ms? ven before having measured tests, we can check with our observability tools how the system performs, like with the following tests:
-
-  ```elixir
-  ex(client_svc@b6d94600b7e3)6>
-  up = 1_000
-
-  1..up
-  |> Enum.to_list()
-  |> Task.async_stream(fn
-    i -> ImageClient.convert_png("my_image.png", "m#(i}@com") end, 
-    ordered: false, 
-    max_concurrency: 10
-  ) |> Stream.run()
-
-
-    Stream.interval(100) 
-    |>Stream.take(1200) 
-    |> Task.async_stream(fn 
-      i -> ImageClient.convert_png("lib/client_svc-0.1.0/priv/test.png", "m#{i}@com") end, 
-      max_concurrenccy: 10, 
-      ordered: false
-    ) 
-    |> Stream.run()
-  ```
+These manual tests generate real load that can be observed in Grafana dashboards (see [Observability](#observability) section)
 
 ## Sources
 
