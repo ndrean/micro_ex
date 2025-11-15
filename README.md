@@ -4,12 +4,18 @@ This a toy **Phoenix-Elixir-based microservices** app demonstrating PNG-to-PDF i
 
 It is complete enough to understand the concepts used but not production code.
 
-It works on Docker as an API. The Elixir containers/services can be reached via _remote_  sessions and the observability services are reachable in the browser (port mapping in _.env.example_).
+It works on Docker as an API with a LiveBook UI to reach the services which have been distributed.
+
+In practice, you can reach any Elixir containers/services via _remote_  sessions and the observability services are reachable in the browser (port mapping _SERVICES.md_).
+
+However, we added a LiveBook with BEAM distribution as this facilitates a lot interaction with the microservices.
+
+You experience the "endpoints hell" (discovery, hardcoded mapping everywhere). OpenAPI documentation and Observability are first-class citizens in such projects and are key to help.
+
+In a separate _nats_ branch, we use [NATS.IO](https://docs.nats.io/) via the [gnat package](https://github.com/nats-io/nats.ex) to address this endpoint management with a different paradigm (event driven pattern) and rethink the architecture.
 
 - [Livebook launcher](https://github.com/ndrean/micro_ex/blob/main/apps/notebooks/monitoring_dashboard.livemd): <http://localhost:8090>
   
-[TODO]: setup as an app
-
 <img src="https://github.com/ndrean/micro_ex/blob/main/priv/Livebook.png" alt="livebook">
 
 - [Services guide](https://github.com/ndrean/micro_ex/blob/main/SERVICES.md)
@@ -1155,11 +1161,8 @@ The sources at the end are a good source of explanation on how to do this.
 
 ## COCOMO Complexity Analysis of this project
 
-Curious? ⏯️ <https://en.wikipedia.org/wiki/COCOMO>
-
-Implementation: <https://github.com/boyter/scc>
-
-> The OpenAPISpecs are "just" YAML but take even more time than Protocol Buffers files to write, but take 0 complexity!?
+Curious about the effort required to build this?  COCOMO (Constructive Cost Model) ⏯️ <https://en.wikipedia.org/wiki/COCOMO> is a standard software engineering metric.
+We used the implementation: <https://github.com/boyter/scc> to generate the table below.
 
 | Language        | Files | Lines  | Blanks | Comments | Code   | Complexity |
 | --------------- | ----- | ------ | ------ | -------- | ------ | ---------- |
@@ -1180,6 +1183,8 @@ Estimated Cost to Develop (organic) $846,917
 Estimated Schedule Effort (organic) 12.91 months
 
 Estimated People Required (organic) 5.83
+
+> The OpenAPISpecs are "just" YAML but take even more time than Protocol Buffers files to write, but take 0 complexity!?
 
 ## Production Considerations
 
